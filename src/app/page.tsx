@@ -1,65 +1,167 @@
-import Image from "next/image";
+import {
+  ArrowRight,
+  BookOpenCheck,
+  CheckCircle2,
+  FileCheck2,
+  FolderDown,
+  LockKeyhole,
+} from "lucide-react";
+import Link from "next/link";
+import { FeatureCard } from "@/components/FeatureCard";
+import { PageContainer } from "@/components/PageContainer";
+import { SafetyNotice } from "@/components/SafetyNotice";
+
+const features = [
+  {
+    step: "Stage 1",
+    title: "Upload & Confirm",
+    description:
+      "Bring synthetic documents into one workspace, review extracted details, and confirm what is accurate.",
+    href: "/profile",
+    linkLabel: "Build your profile",
+    icon: FileCheck2,
+  },
+  {
+    step: "Stage 2",
+    title: "Understand the Rules",
+    description:
+      "Read plain-language explanations of published programme rules with transparent calculations and citations.",
+    href: "/understand",
+    linkLabel: "Explore explanations",
+    icon: BookOpenCheck,
+  },
+  {
+    step: "Stage 3",
+    title: "Prepare Your Packet",
+    description:
+      "Spot missing or expired items, review a packet preview, and prepare a clean download for your next step.",
+    href: "/prepare",
+    linkLabel: "See packet tools",
+    icon: FolderDown,
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <PageContainer
+      variant="hero"
+      eyebrow="Affordable-housing application readiness"
+      title="Prepare with confidence. You stay in control."
+      description="HousingReady Copilot helps you organise documents and understand published housing programme rules—without making decisions for you."
+      actions={
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+          <Link
+            href="/profile"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-bold text-white shadow-lg shadow-teal-900/15 outline-none transition-colors hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200"
+          >
+            Start My Readiness Check
+            <ArrowRight aria-hidden="true" size={19} />
+          </Link>
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600">
+            <LockKeyhole aria-hidden="true" size={17} className="text-brand" />
+            No account or real applicant data
+          </span>
+        </div>
+      }
+      aside={
+        <section
+          aria-labelledby="workspace-summary-title"
+          className="relative overflow-hidden rounded-3xl border border-line bg-white p-6 shadow-card sm:p-7"
+        >
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-1.5 bg-brand"
+          />
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand">
+                Your workspace
+              </p>
+              <h2
+                id="workspace-summary-title"
+                className="mt-2 text-xl font-bold text-ink"
+              >
+                Readiness overview
+              </h2>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+              Not started
+            </span>
+          </div>
+          <ul className="mt-7 space-y-4">
+            {[
+              "Confirm document details",
+              "Review rule explanations",
+              "Prepare a packet checklist",
+            ].map((item) => (
+              <li
+                key={item}
+                className="flex items-center gap-3 rounded-xl bg-canvas p-3.5"
+              >
+                <CheckCircle2
+                  aria-hidden="true"
+                  size={20}
+                  className="shrink-0 text-brand"
+                />
+                <span className="text-sm font-semibold text-ink-soft">
+                  {item}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-5 text-xs leading-5 text-slate-500">
+            You confirm every detail before it is used in your packet.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        </section>
+      }
+    >
+      <section aria-labelledby="how-it-works-title">
+        <div className="max-w-2xl">
+          <p className="text-sm font-bold uppercase tracking-[0.14em] text-brand">
+            Three clear stages
+          </p>
+          <h2
+            id="how-it-works-title"
+            className="mt-3 text-2xl font-bold tracking-tight text-ink sm:text-3xl"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            From scattered paperwork to a prepared packet
+          </h2>
         </div>
-      </main>
-    </div>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          {features.map((feature) => (
+            <FeatureCard key={feature.title} {...feature} />
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-10 grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+        <SafetyNotice />
+        <section
+          aria-labelledby="privacy-note-title"
+          className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-6"
+        >
+          <div className="flex items-start gap-4">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
+              <LockKeyhole aria-hidden="true" size={20} />
+            </span>
+            <div>
+              <h2 id="privacy-note-title" className="font-bold text-ink">
+                Prototype privacy
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                This prototype uses synthetic documents only and temporary
+                session processing. Do not upload real applicant data.
+              </p>
+              <Link
+                href="/privacy"
+                className="link-focus mt-3 inline-block text-sm font-bold text-brand hover:text-brand-dark"
+              >
+                Read Privacy &amp; Safety
+              </Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    </PageContainer>
   );
 }
