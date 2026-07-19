@@ -109,6 +109,9 @@ describe("Profile-driven calculation updates", () => {
 
     expect(original.calculation.combined.resultCents).toBe(4_992_000);
     expect(corrected.calculation.combined.resultCents).toBe(5_200_000);
+    expect(
+      formatCurrencyFromCents(corrected.calculation.combined.resultCents),
+    ).toBe("$52,000.00");
     expect(corrected.calculation.inputFingerprint).not.toBe(
       original.calculation.inputFingerprint,
     );

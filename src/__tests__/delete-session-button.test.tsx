@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DeleteSessionButton } from "@/components/DeleteSessionButton";
+import { PREPARE_SESSION_KEY } from "@/lib/prepare-session";
 import {
   PROFILE_SESSION_KEY,
   SESSION_DELETED_EVENT,
@@ -26,6 +27,7 @@ describe("Delete Session", () => {
   it("confirms, clears only HousingReady keys, dispatches reset, and returns home", () => {
     window.sessionStorage.setItem(PROFILE_SESSION_KEY, "profile");
     window.sessionStorage.setItem(UNDERSTAND_SESSION_KEY, "understand");
+    window.sessionStorage.setItem(PREPARE_SESSION_KEY, "prepare");
     window.sessionStorage.setItem("housingready:preview:v1", "temporary");
     window.sessionStorage.setItem("housingready-copilot-session", "legacy");
     window.sessionStorage.setItem("another-app:keep", "preserved");
@@ -41,8 +43,15 @@ describe("Delete Session", () => {
     expect(confirmMock).toHaveBeenCalledWith(
       expect.stringContaining("Delete this temporary HousingReady session?"),
     );
+    expect(confirmMock).toHaveBeenCalledWith(
+      expect.stringContaining("Prepare review state"),
+    );
+    expect(confirmMock).toHaveBeenCalledWith(
+      expect.stringContaining("transient document or packet preview URLs"),
+    );
     expect(window.sessionStorage.getItem(PROFILE_SESSION_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(UNDERSTAND_SESSION_KEY)).toBeNull();
+    expect(window.sessionStorage.getItem(PREPARE_SESSION_KEY)).toBeNull();
     expect(window.sessionStorage.getItem("housingready:preview:v1")).toBeNull();
     expect(
       window.sessionStorage.getItem("housingready-copilot-session"),
@@ -58,6 +67,7 @@ describe("Delete Session", () => {
   it("does nothing when deletion is cancelled", () => {
     window.sessionStorage.setItem(PROFILE_SESSION_KEY, "profile");
     window.sessionStorage.setItem(UNDERSTAND_SESSION_KEY, "understand");
+    window.sessionStorage.setItem(PREPARE_SESSION_KEY, "prepare");
     vi.spyOn(window, "confirm").mockReturnValue(false);
     const deletedEvent = vi.fn();
     window.addEventListener(SESSION_DELETED_EVENT, deletedEvent, {
@@ -70,6 +80,9 @@ describe("Delete Session", () => {
     expect(window.sessionStorage.getItem(PROFILE_SESSION_KEY)).toBe("profile");
     expect(window.sessionStorage.getItem(UNDERSTAND_SESSION_KEY)).toBe(
       "understand",
+    );
+    expect(window.sessionStorage.getItem(PREPARE_SESSION_KEY)).toBe(
+      "prepare",
     );
     expect(deletedEvent).not.toHaveBeenCalled();
     expect(replaceMock).not.toHaveBeenCalled();

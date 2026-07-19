@@ -33,15 +33,32 @@ export const dataVerificationStatusSchema = z.enum([
   "template",
   "unverified",
   "verified",
+  "verified_official",
+  "prototype_policy",
 ]);
 
+/**
+ * Legacy source categories remain parseable so stored fixtures and previous
+ * corpus versions fail safely rather than becoming unreadable. The active FY
+ * 2026 corpus uses the three explicit categories at the end of this enum.
+ */
 export const ruleSourceTypeSchema = z.enum([
   "application-policy",
-  "organizer-pack",
   "official-rule",
+  "official-hud-data",
+  "product-arithmetic",
+  "product-policy",
+]);
+
+export const corpusSourceTypeSchema = z.enum([
+  "verified-official-hud-frozen-rule-corpus",
 ]);
 
 export const householdSizeSchema = z.number().int().min(1).max(8);
+
+export const primaryComparisonTypeSchema = z.literal(
+  "standard-60-percent-mtsp",
+);
 
 export const ruleGeographySchema = z
   .object({
@@ -51,10 +68,96 @@ export const ruleGeographySchema = z
   })
   .strict();
 
+export const verifiedOfficialThresholdRowSchema = z
+  .object({
+    householdSize: householdSizeSchema,
+    standard50PercentVeryLowIncomeLimitCents: z
+      .number()
+      .int()
+      .nonnegative()
+      .safe(),
+    standard60PercentMtspIncomeLimitCents: z
+      .number()
+      .int()
+      .nonnegative()
+      .safe(),
+  })
+  .strict();
+
+/**
+ * Provenance and the two official threshold series frozen from HUD's FY 2026
+ * MTSP table. This record is deliberately separate from HousingReady-authored
+ * calculation and decision-boundary policy passages.
+ */
+export const verifiedOfficialHudSourceSchema = z
+  .object({
+    sourceId: z.string().min(1).max(200),
+    sourceVersion: z.string().min(1).max(200),
+    publisher: z.string().min(1).max(300),
+    datasetTitle: z.string().min(1).max(500),
+    datasetPageUrl: sourceLinkSchema,
+    pdfUrl: sourceLinkSchema,
+    pdfPage: z.number().int().positive(),
+    pdfPageCount: z.number().int().positive(),
+    effectiveDate: isoDateSchema,
+    ruleYear: z.number().int().min(2000),
+    geography: ruleGeographySchema,
+    hmfaName: z.string().min(1).max(300),
+    medianFamilyIncomeCents: z.number().int().nonnegative().safe(),
+    primaryComparisonType: primaryComparisonTypeSchema,
+    primaryComparisonLabel: z.literal("60% MTSP income limit"),
+    verificationStatus: z.literal("verified_official"),
+    verificationNote: z.string().min(1).max(2_000),
+    householdSizeThresholds: z
+      .array(verifiedOfficialThresholdRowSchema)
+      .length(8),
+  })
+  .strict()
+  .superRefine((source, context) => {
+    const sizes = new Set<number>();
+
+    source.householdSizeThresholds.forEach((threshold, index) => {
+      if (sizes.has(threshold.householdSize)) {
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate official threshold household size: ${threshold.householdSize}`,
+          path: ["householdSizeThresholds", index, "householdSize"],
+        });
+      }
+      sizes.add(threshold.householdSize);
+    });
+
+    for (let householdSize = 1; householdSize <= 8; householdSize += 1) {
+      if (!sizes.has(householdSize)) {
+        context.addIssue({
+          code: "custom",
+          message: `Missing official threshold record for household size ${householdSize}.`,
+          path: ["householdSizeThresholds"],
+        });
+      }
+    }
+
+    if (source.pdfPage > source.pdfPageCount) {
+      context.addIssue({
+        code: "custom",
+        message: "The cited PDF page cannot exceed the PDF page count.",
+        path: ["pdfPage"],
+      });
+    }
+
+    if (source.hmfaName !== source.geography.hudArea) {
+      context.addIssue({
+        code: "custom",
+        message: "The HMFA name must match the official threshold geography.",
+        path: ["hmfaName"],
+      });
+    }
+  });
+
 export const citationPassageSchema = z
   .object({
     citationId: z.string().min(1).max(200),
-    sectionOrRowId: z.string().min(1).max(300),
+    sectionOrRowId: z.string().min(1).max(500),
     passage: z.string().min(1).max(2_000),
     topics: z.array(z.string().min(1).max(100)).min(1).max(30),
     sourceType: ruleSourceTypeSchema,
@@ -77,7 +180,7 @@ export const householdSizeThresholdSchema = z
   .strict()
   .superRefine((threshold, context) => {
     if (
-      threshold.verificationStatus === "verified" &&
+      isVerifiedDataStatus(threshold.verificationStatus) &&
       threshold.annualIncomeLimitCents === null
     ) {
       context.addIssue({
@@ -88,7 +191,7 @@ export const householdSizeThresholdSchema = z
     }
 
     if (
-      threshold.verificationStatus === "verified" &&
+      isVerifiedDataStatus(threshold.verificationStatus) &&
       threshold.citationId === null
     ) {
       context.addIssue({
@@ -131,7 +234,8 @@ export const ruleCorpusSchema = z
     geography: ruleGeographySchema,
     ruleYear: z.number().int().min(2000),
     effectiveDate: isoDateSchema.nullable(),
-    sourceType: z.literal("organizer-provided-frozen-rule-corpus"),
+    sourceType: corpusSourceTypeSchema,
+    sourceId: z.string().min(1).max(200),
     sourceTitle: z.string().min(1).max(500),
     sourcePublisher: z.string().min(1).max(300),
     sourceUrl: z
@@ -142,7 +246,19 @@ export const ruleCorpusSchema = z
         (value) => value.startsWith("https://"),
         "The corpus source link must use HTTPS.",
       ),
+    sourcePdfUrl: z
+      .string()
+      .max(2_048)
+      .url()
+      .refine(
+        (value) => value.startsWith("https://"),
+        "The corpus PDF link must use HTTPS.",
+      )
+      .nullable(),
+    sourcePdfPage: z.number().int().positive().nullable(),
     sourceVersion: z.string().min(1).max(200),
+    primaryComparisonType: primaryComparisonTypeSchema,
+    officialThresholdSource: verifiedOfficialHudSourceSchema.nullable(),
     citationPassages: z.array(citationPassageSchema),
     householdSizeThresholds: z
       .array(householdSizeThresholdSchema)
@@ -189,12 +305,15 @@ export const ruleCorpusSchema = z
         });
       }
 
-      if (threshold.verificationStatus === "verified") {
+      if (isVerifiedDataStatus(threshold.verificationStatus)) {
         const citation = corpus.citationPassages.find(
           (candidate) => candidate.citationId === threshold.citationId,
         );
 
-        if (!citation || citation.verificationStatus !== "verified") {
+        if (
+          !citation ||
+          !isVerifiedDataStatus(citation.verificationStatus)
+        ) {
           context.addIssue({
             code: "custom",
             message:
@@ -242,7 +361,7 @@ export const ruleCorpusSchema = z
       });
     });
 
-    if (corpus.dataVerificationStatus === "verified") {
+    if (isVerifiedDataStatus(corpus.dataVerificationStatus)) {
       if (corpus.effectiveDate === null) {
         context.addIssue({
           code: "custom",
@@ -252,8 +371,8 @@ export const ruleCorpusSchema = z
       }
 
       if (
-        !corpus.householdSizeThresholds.some(
-          (threshold) => threshold.verificationStatus === "verified",
+        !corpus.householdSizeThresholds.some((threshold) =>
+          isVerifiedDataStatus(threshold.verificationStatus),
         )
       ) {
         context.addIssue({
@@ -281,14 +400,105 @@ export const ruleCorpusSchema = z
         });
       }
     }
+
+    if (corpus.dataVerificationStatus === "verified_official") {
+      const officialSource = corpus.officialThresholdSource;
+
+      if (
+        corpus.sourceType !== "verified-official-hud-frozen-rule-corpus"
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "A verified official corpus must identify its HUD source type.",
+          path: ["sourceType"],
+        });
+      }
+
+      if (!officialSource) {
+        context.addIssue({
+          code: "custom",
+          message: "A verified official corpus must embed its HUD source record.",
+          path: ["officialThresholdSource"],
+        });
+        return;
+      }
+
+      const matchingOfficialCitation = corpus.citationPassages.find(
+        (citation) =>
+          citation.sourceType === "official-hud-data" &&
+          citation.verificationStatus === "verified_official" &&
+          citation.sourceUrl === officialSource.pdfUrl &&
+          citation.effectiveDate === officialSource.effectiveDate,
+      );
+
+      if (!matchingOfficialCitation) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "A verified official corpus must contain a verified HUD PDF citation.",
+          path: ["citationPassages"],
+        });
+      }
+
+      if (
+        corpus.sourceId !== officialSource.sourceId ||
+        corpus.sourceVersion !== officialSource.sourceVersion ||
+        corpus.sourceUrl !== officialSource.datasetPageUrl ||
+        corpus.sourcePdfUrl !== officialSource.pdfUrl ||
+        corpus.sourcePdfPage !== officialSource.pdfPage ||
+        corpus.effectiveDate !== officialSource.effectiveDate ||
+        corpus.ruleYear !== officialSource.ruleYear ||
+        corpus.geography.hudArea !== officialSource.hmfaName
+      ) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "The corpus metadata must match the embedded verified HUD source.",
+          path: ["officialThresholdSource"],
+        });
+      }
+
+      corpus.householdSizeThresholds.forEach((threshold, index) => {
+        const officialThreshold =
+          officialSource.householdSizeThresholds.find(
+            (candidate) =>
+              candidate.householdSize === threshold.householdSize,
+          );
+
+        if (
+          !officialThreshold ||
+          threshold.annualIncomeLimitCents !==
+            officialThreshold.standard60PercentMtspIncomeLimitCents ||
+          threshold.verificationStatus !== "verified_official" ||
+          threshold.citationId !== matchingOfficialCitation?.citationId
+        ) {
+          context.addIssue({
+            code: "custom",
+            message:
+              "Every primary threshold must match the verified HUD 60% MTSP row.",
+            path: ["householdSizeThresholds", index],
+          });
+        }
+      });
+    }
   });
 
 export type DataVerificationStatus = z.infer<
   typeof dataVerificationStatusSchema
 >;
 export type RuleSourceType = z.infer<typeof ruleSourceTypeSchema>;
+export type CorpusSourceType = z.infer<typeof corpusSourceTypeSchema>;
 export type HouseholdSize = z.infer<typeof householdSizeSchema>;
+export type PrimaryComparisonType = z.infer<
+  typeof primaryComparisonTypeSchema
+>;
 export type RuleGeography = z.infer<typeof ruleGeographySchema>;
+export type VerifiedOfficialThresholdRow = z.infer<
+  typeof verifiedOfficialThresholdRowSchema
+>;
+export type VerifiedOfficialHudSource = z.infer<
+  typeof verifiedOfficialHudSourceSchema
+>;
 export type CitationPassage = z.infer<typeof citationPassageSchema>;
 export type HouseholdSizeThreshold = z.infer<
   typeof householdSizeThresholdSchema
@@ -300,14 +510,20 @@ export type RuleCorpus = z.infer<typeof ruleCorpusSchema>;
 export type VerifiedThreshold = HouseholdSizeThreshold & {
   annualIncomeLimitCents: number;
   citationId: string;
-  verificationStatus: "verified";
+  verificationStatus: "verified" | "verified_official";
 };
+
+export function isVerifiedDataStatus(
+  status: DataVerificationStatus,
+): status is "verified" | "verified_official" {
+  return status === "verified" || status === "verified_official";
+}
 
 export function isVerifiedThreshold(
   threshold: HouseholdSizeThreshold,
 ): threshold is VerifiedThreshold {
   return (
-    threshold.verificationStatus === "verified" &&
+    isVerifiedDataStatus(threshold.verificationStatus) &&
     threshold.annualIncomeLimitCents !== null &&
     threshold.citationId !== null
   );

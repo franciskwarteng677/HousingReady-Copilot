@@ -2,67 +2,74 @@
 
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { frozen2026MtspCorpus } from "@/data/rules";
-import { isCompletedProfileSession } from "@/lib/profile-fingerprint";
-import { loadProfileSession } from "@/lib/session";
-import { loadCurrentUnderstandSession } from "@/lib/understand-session";
-import { getUnderstandProgress } from "@/lib/understand-state";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  loadCanonicalWorkflowState,
+  type CanonicalWorkflowState,
+  type ReadyWorkflowState,
+} from "@/lib/workflow-state";
 
 type PrepareAccessGuardProps = {
   children: ReactNode;
 };
 
+const PrepareWorkflowContext = createContext<ReadyWorkflowState | null>(null);
+
+export function usePrepareWorkflowState(): ReadyWorkflowState {
+  const state = useContext(PrepareWorkflowContext);
+
+  if (!state) {
+    throw new Error(
+      "Prepare workflow content must render inside PrepareAccessGuard.",
+    );
+  }
+
+  return state;
+}
+
 export function PrepareAccessGuard({ children }: PrepareAccessGuardProps) {
   const { replace } = useRouter();
-  const [access, setAccess] = useState<
-    "checking" | "allowed" | "redirecting"
-  >("checking");
-  const [message, setMessage] = useState(
-    "Checking Profile and Understand completion.",
-  );
+  const [workflowState, setWorkflowState] =
+    useState<CanonicalWorkflowState | null>(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      const profile = loadProfileSession(window.sessionStorage);
-      if (!isCompletedProfileSession(profile)) {
-        setAccess("redirecting");
-        setMessage("Complete Profile before opening Prepare.");
-        replace("/profile");
-        return;
+      const nextState = loadCanonicalWorkflowState(window.sessionStorage);
+      setWorkflowState(nextState);
+
+      if (nextState.status !== "ready") {
+        replace(nextState.redirectTo);
       }
-
-      const understand = loadCurrentUnderstandSession(
-        window.sessionStorage,
-        profile,
-      );
-      const progress = getUnderstandProgress(
-        profile,
-        understand,
-        frozen2026MtspCorpus,
-      );
-
-      if (!understand?.understandComplete || !progress.understandComplete) {
-        setAccess("redirecting");
-        setMessage("Complete the verified Understand review before opening Prepare.");
-        replace("/understand");
-        return;
-      }
-
-      setAccess("allowed");
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
   }, [replace]);
 
-  if (access === "allowed") {
-    return children;
+  if (workflowState?.status === "ready") {
+    return (
+      <PrepareWorkflowContext.Provider value={workflowState}>
+        {children}
+      </PrepareWorkflowContext.Provider>
+    );
   }
+
+  const message =
+    workflowState?.status === "profile-incomplete"
+      ? "Complete Profile before opening Prepare."
+      : workflowState?.status === "understand-incomplete"
+        ? "Complete the verified Understand review before opening Prepare."
+        : "Checking Profile and Understand completion.";
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
       <section className="rounded-2xl border border-line bg-white p-8 text-center shadow-card">
-        {access === "checking" ? (
+        {workflowState === null ? (
           <LoaderCircle
             aria-hidden="true"
             size={28}

@@ -8,6 +8,7 @@ import {
   type ProfileSession,
 } from "@/lib/profile-schema";
 import { validateConfirmedFieldValue } from "@/lib/profile-corrections";
+import { invalidatePrepareSessionForProfileChange } from "@/lib/prepare-session";
 import {
   getProfileProgress,
   projectConfirmedFields,
@@ -139,6 +140,7 @@ export function saveProfileSession(
   session: ProfileSession,
 ): void {
   const validated = profileSessionSchema.parse(session);
+  invalidatePrepareSessionForProfileChange(storage, validated);
   invalidateUnderstandSessionForProfileChange(storage, validated);
   storage.setItem(PROFILE_SESSION_KEY, JSON.stringify(validated));
 }

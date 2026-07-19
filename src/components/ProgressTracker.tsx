@@ -5,18 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { progressSteps } from "@/data/progress-steps";
-import { frozen2026MtspCorpus } from "@/data/rules";
-import { isCompletedProfileSession } from "@/lib/profile-fingerprint";
 import {
-  loadProfileSession,
   PROFILE_UPDATED_EVENT,
   SESSION_DELETED_EVENT,
 } from "@/lib/session";
-import {
-  loadCurrentUnderstandSession,
-  UNDERSTAND_UPDATED_EVENT,
-} from "@/lib/understand-session";
-import { getUnderstandProgress } from "@/lib/understand-state";
+import { UNDERSTAND_UPDATED_EVENT } from "@/lib/understand-session";
+import { loadCanonicalWorkflowState } from "@/lib/workflow-state";
 
 export function ProgressTracker() {
   const pathname = usePathname();
@@ -25,23 +19,12 @@ export function ProgressTracker() {
 
   useEffect(() => {
     function updateProfileState() {
-      const profile = loadProfileSession(window.sessionStorage);
-      const profileIsComplete = isCompletedProfileSession(profile);
-      const understand =
-        profileIsComplete && profile
-          ? loadCurrentUnderstandSession(window.sessionStorage, profile)
-          : null;
-      const understandProgress = getUnderstandProgress(
-        profile,
-        understand,
-        frozen2026MtspCorpus,
+      const workflowState = loadCanonicalWorkflowState(
+        window.sessionStorage,
       );
 
-      setProfileComplete(profileIsComplete);
-      setUnderstandComplete(
-        Boolean(understand?.understandComplete) &&
-          understandProgress.understandComplete,
-      );
+      setProfileComplete(workflowState.status !== "profile-incomplete");
+      setUnderstandComplete(workflowState.status === "ready");
     }
 
     const timeoutId = window.setTimeout(updateProfileState, 0);
@@ -65,9 +48,12 @@ export function ProgressTracker() {
       <ol className="mx-auto grid w-full max-w-7xl grid-cols-3 gap-2 px-4 py-3 sm:gap-3 sm:px-6 lg:px-8">
         {progressSteps.map((step, index) => {
           const isCurrent = pathname === step.href;
+          const stageIsComplete =
+            (index === 0 && profileComplete) ||
+            (index === 1 && understandComplete);
           const isCompleted =
-            (index === 0 && profileComplete && !isCurrent) ||
-            (index === 1 && understandComplete && !isCurrent);
+            stageIsComplete && !isCurrent;
+          const isCurrentAndCompleted = stageIsComplete && isCurrent;
           const isLocked =
             (index === 1 && !profileComplete) ||
             (index === 2 && (!profileComplete || !understandComplete));
@@ -96,7 +82,7 @@ export function ProgressTracker() {
               >
                 {isLocked ? (
                   <LockKeyhole size={13} />
-                ) : isCompleted ? (
+                ) : isCompleted || isCurrentAndCompleted ? (
                   <Check size={15} />
                 ) : (
                   index + 1
@@ -111,7 +97,9 @@ export function ProgressTracker() {
                     ? index === 1
                       ? "Profile required"
                       : "Understand required"
-                    : isCurrent
+                    : isCurrentAndCompleted
+                      ? "Completed · current step"
+                      : isCurrent
                       ? "Current step"
                       : isCompleted
                         ? "Completed"
@@ -143,7 +131,7 @@ export function ProgressTracker() {
                 <Link
                   href={step.href}
                   aria-current={isCurrent ? "step" : undefined}
-                  aria-label={`Step ${index + 1}: ${step.label}${isCurrent ? ", current step" : ""}`}
+                  aria-label={`Step ${index + 1}: ${step.label}${isCurrentAndCompleted ? ", completed, current step" : isCurrent ? ", current step" : ""}`}
                   className={itemClassName}
                 >
                   {content}

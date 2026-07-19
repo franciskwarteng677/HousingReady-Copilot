@@ -25,7 +25,7 @@ export function DeleteSessionButton() {
 
   function deleteSession() {
     const confirmed = window.confirm(
-      "Delete this temporary HousingReady session? Confirmed fields, document metadata, Understand calculations, household size, and active previews will be cleared. This cannot be undone.",
+      "Delete this temporary HousingReady session? Confirmed fields, document metadata, Understand calculations, household size, Prepare review state, and transient document or packet preview URLs will be cleared. Already downloaded packet files are not controlled by this browser session. This cannot be undone.",
     );
 
     if (!confirmed) {

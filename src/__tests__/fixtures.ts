@@ -202,42 +202,5 @@ export function makeCompleteIncomeProfile({
 }
 
 export function makeVerifiedRuleCorpus(): RuleCorpus {
-  const syntheticCitation = {
-    citationId: "synthetic-threshold-sentinel-household-2",
-    sectionOrRowId: "synthetic-test-row.household-2",
-    passage:
-      "Synthetic test sentinel used only to verify citation plumbing. This is not an official rule or published threshold.",
-    topics: ["threshold", "income limit", "limit source"],
-    sourceType: "organizer-pack" as const,
-    sourceTitle: "Synthetic threshold test sentinel — not official data",
-    sourcePublisher: "HousingReady Copilot test fixture — not an official publisher",
-    sourceUrl: "https://example.test/synthetic-threshold-sentinel",
-    effectiveDate: "2026-04-01",
-    verificationStatus: "verified" as const,
-  };
-
-  return ruleCorpusSchema.parse({
-    ...frozen2026MtspCorpus,
-    corpusId: "verified-test-corpus",
-    effectiveDate: "2026-04-01",
-    sourceVersion: "verified-test-2026-v1",
-    citationPassages: [
-      ...frozen2026MtspCorpus.citationPassages,
-      syntheticCitation,
-    ],
-    householdSizeThresholds:
-      frozen2026MtspCorpus.householdSizeThresholds.map((threshold) =>
-        threshold.householdSize === 2
-          ? {
-              ...threshold,
-              annualIncomeLimitCents: 12_345,
-              citationId: syntheticCitation.citationId,
-              verificationStatus: "verified" as const,
-            }
-          : threshold,
-      ),
-    dataVerificationStatus: "verified",
-    verificationNotes:
-      "Synthetic sentinel fixture used only to exercise verified-data code paths. It is not official rule data.",
-  });
+  return ruleCorpusSchema.parse(structuredClone(frozen2026MtspCorpus));
 }

@@ -160,7 +160,7 @@ describe("restored confirmed Profile editing", () => {
     expect(screen.queryByText("$49,920.00")).toBeNull();
     expect(
       screen.getAllByText(
-        "Annualised income calculation updated because confirmed gross pay changed from $1,620.00 to $1,700.00.",
+        /Annualised income calculation updated because confirmed gross pay changed from \$1,620\.00 to \$1,700\.00\./,
       ),
     ).not.toHaveLength(0);
     expect(loadUnderstandSession(window.sessionStorage)).toMatchObject({

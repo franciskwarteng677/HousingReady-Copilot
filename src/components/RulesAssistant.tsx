@@ -7,26 +7,31 @@ import {
   SearchCheck,
   ShieldX,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { RuleCitation } from "@/components/RuleCitation";
 import {
   answerRulesQuestion,
   type RulesAssistantResponse,
 } from "@/lib/rules-assistant";
 import type { HouseholdSize, RuleCorpus } from "@/lib/rules-schema";
+import type { StoredIncomeCalculation } from "@/lib/understand-schema";
 
 type RulesAssistantProps = {
   corpus: RuleCorpus;
   householdSize?: HouseholdSize;
+  calculation?: StoredIncomeCalculation | null;
 };
 
 const suggestedQuestions = [
-  "What program and geography are loaded?",
   "What rule year is being used?",
+  "What geography is loaded?",
+  "What is the two-person 60% threshold?",
+  "When did the threshold become effective?",
   "How was the annualised amount calculated?",
+  "What is the difference between the amount and threshold?",
   "What source supports the displayed threshold?",
-  "What happens when required information is uncertain?",
   "Who makes the final housing decision?",
+  "Am I eligible?",
 ] as const;
 
 const MAX_RULE_QUESTION_LENGTH = 500;
@@ -54,7 +59,9 @@ function ConfidenceBadge({
 export function RulesAssistant({
   corpus,
   householdSize,
+  calculation,
 }: RulesAssistantProps) {
+  const responseRef = useRef<HTMLElement>(null);
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [response, setResponse] = useState<RulesAssistantResponse | null>(null);
@@ -80,6 +87,7 @@ export function RulesAssistant({
     const nextResponse = answerRulesQuestion(trimmed, {
       corpus,
       householdSize,
+      calculation,
     });
     setValidationError("");
     setQuestion(trimmed);
@@ -92,6 +100,7 @@ export function RulesAssistant({
           ? "The decision request was refused."
           : "The rules assistant abstained because the loaded corpus does not support an answer.",
     );
+    window.setTimeout(() => responseRef.current?.focus(), 0);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -181,6 +190,8 @@ export function RulesAssistant({
 
       {response ? (
         <article
+          ref={responseRef}
+          tabIndex={-1}
           aria-labelledby="rules-response-heading"
           className="mt-6 rounded-2xl border border-line bg-canvas p-4 sm:p-5"
         >

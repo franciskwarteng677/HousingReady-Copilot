@@ -9,7 +9,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ConfirmedProfilePanel } from "@/components/ConfirmedProfilePanel";
 import { HouseholdSizeControl } from "@/components/HouseholdSizeControl";
 import { IncomeCalculationPanel } from "@/components/IncomeCalculationPanel";
@@ -34,6 +40,7 @@ import {
   SESSION_DELETED_EVENT,
 } from "@/lib/session";
 import {
+  acknowledgeUnderstandReview,
   confirmHouseholdSize,
   createUnderstandSession,
   loadUnderstandSession,
@@ -46,6 +53,7 @@ import {
   getUnderstandProgress,
   inputSnapshotFromCalculation,
   INCOME_INPUT_NO_CALL_MESSAGE,
+  isUnderstandReviewCurrent,
 } from "@/lib/understand-state";
 import type {
   StoredIncomeCalculation,
@@ -56,6 +64,8 @@ type AccessState = "checking" | "ready" | "redirecting";
 
 export function UnderstandWorkflow() {
   const { push, replace } = useRouter();
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const focusContinueAfterReviewRef = useRef(false);
   const [accessState, setAccessState] = useState<AccessState>("checking");
   const [profile, setProfile] = useState<ProfileSession | null>(null);
   const [session, setSession] = useState<UnderstandSession | null>(null);
@@ -73,6 +83,16 @@ export function UnderstandWorkflow() {
     () => getUnderstandProgress(profile, session, frozen2026MtspCorpus),
     [profile, session],
   );
+
+  useEffect(() => {
+    if (
+      progress.understandComplete &&
+      focusContinueAfterReviewRef.current
+    ) {
+      focusContinueAfterReviewRef.current = false;
+      continueButtonRef.current?.focus();
+    }
+  }, [progress.understandComplete]);
 
   const persistSession = useCallback((nextSession: UnderstandSession) => {
     saveUnderstandSession(window.sessionStorage, nextSession);
@@ -108,7 +128,13 @@ export function UnderstandWorkflow() {
       const profileChanged = Boolean(
         existing &&
           (existing.profileStale ||
-            existing.profileFingerprint !== currentFingerprint),
+            existing.profileFingerprint !== currentFingerprint ||
+            existing.profileRevision !== loadedProfile.revision),
+      );
+      const thresholdSourceChanged = Boolean(
+        existing &&
+          (existing.corpusId !== frozen2026MtspCorpus.corpusId ||
+            existing.corpusVersion !== frozen2026MtspCorpus.sourceVersion),
       );
       let calculation: StoredIncomeCalculation | null = null;
 
@@ -119,10 +145,11 @@ export function UnderstandWorkflow() {
         setCalculationNoCall(null);
 
         if (profileChanged) {
-          const notice = describeCalculationUpdate(
+          const calculationNotice = describeCalculationUpdate(
             previousInputs,
             built.inputSnapshot,
           );
+          const notice = `${calculationNotice} The previous Understand acknowledgement was cleared because the confirmed Profile changed. Review the updated comparison and official source again.`;
           setUpdateNotice(notice);
           setAnnouncement(notice);
         } else if (reason === "initial") {
@@ -140,6 +167,20 @@ export function UnderstandWorkflow() {
         setAnnouncement("The deterministic calculation could not be completed.");
       }
 
+      if (!profileChanged && thresholdSourceChanged) {
+        const notice =
+          "The previous Understand acknowledgement was cleared because the verified threshold source version changed. Review the current comparison and official source again.";
+        setUpdateNotice(notice);
+        setAnnouncement(notice);
+      } else if (
+        reason === "initial" &&
+        existing?.reviewInvalidationReason === "household-size-changed"
+      ) {
+        setUpdateNotice(
+          "Household size changed after the previous review. Confirm the current household size and review the updated threshold comparison and official source again.",
+        );
+      }
+
       const householdSize = existing?.householdSize ?? null;
       const verifiedThreshold = householdSize
         ? getVerifiedThresholdComparisonData(
@@ -147,28 +188,44 @@ export function UnderstandWorkflow() {
             householdSize.value,
           )
         : null;
+      const corpusHasVerifiedThresholds = Boolean(
+        getVerifiedThresholdComparisonData(frozen2026MtspCorpus, 1),
+      );
       const canPreserveRuleReview = Boolean(
         verifiedThreshold &&
-          existing?.ruleReviewState === "complete" &&
-          existing.thresholdReviewCompletedAt &&
+          existing &&
+          calculation &&
           !profileChanged &&
-          existing.corpusId === frozen2026MtspCorpus.corpusId &&
-          existing.corpusVersion === frozen2026MtspCorpus.sourceVersion &&
-          existing.calculation?.inputFingerprint === calculation?.inputFingerprint,
+          !thresholdSourceChanged &&
+          existing.calculation?.inputFingerprint ===
+            calculation.inputFingerprint &&
+          isUnderstandReviewCurrent(
+            loadedProfile,
+            existing,
+            frozen2026MtspCorpus,
+          ),
       );
+      const reviewInvalidationReason = canPreserveRuleReview
+        ? null
+        : profileChanged
+          ? "profile-changed"
+          : thresholdSourceChanged
+            ? "threshold-source-changed"
+            : existing?.reviewInvalidationReason ?? null;
       const now = new Date().toISOString();
       const nextSession = createUnderstandSession({
         profile: loadedProfile,
         householdSize,
         calculation,
-        ruleReviewState: verifiedThreshold
-          ? canPreserveRuleReview
-            ? "complete"
-            : "pending-review"
-          : "blocked-missing-verified-data",
-        thresholdReviewCompletedAt: canPreserveRuleReview
-          ? existing?.thresholdReviewCompletedAt ?? null
+        ruleReviewState: canPreserveRuleReview
+          ? "complete"
+          : corpusHasVerifiedThresholds
+            ? "pending-review"
+            : "blocked-missing-verified-data",
+        reviewAcknowledgement: canPreserveRuleReview
+          ? existing?.reviewAcknowledgement ?? null
           : null,
+        reviewInvalidationReason,
         updatedAt: now,
       });
 
@@ -221,17 +278,23 @@ export function UnderstandWorkflow() {
       return;
     }
 
+    const previousSize = session.householdSize.value;
+    const hadAcknowledgement = Boolean(session.reviewAcknowledgement);
     const nextSession = createUnderstandSession({
       profile,
       householdSize: null,
       calculation: session.calculation,
-      ruleReviewState: "blocked-missing-verified-data",
+      ruleReviewState: "pending-review",
+      reviewAcknowledgement: null,
+      reviewInvalidationReason: "household-size-changed",
       updatedAt: new Date().toISOString(),
     });
     persistSession(nextSession);
-    setAnnouncement(
-      `Household size changed to ${value}. Confirm the renter-provided value before continuing.`,
-    );
+    const notice = hadAcknowledgement
+      ? `Household size changed from ${previousSize} to ${value}. The previous Understand acknowledgement was cleared. Confirm the new household size and review the updated threshold comparison again.`
+      : `Household size changed from ${previousSize} to ${value}. Confirm the renter-provided value before continuing.`;
+    setUpdateNotice(notice);
+    setAnnouncement(notice);
   }
 
   function handleHouseholdSizeConfirm() {
@@ -255,6 +318,11 @@ export function UnderstandWorkflow() {
       ruleReviewState: verifiedThreshold
         ? "pending-review"
         : "blocked-missing-verified-data",
+      reviewAcknowledgement: null,
+      reviewInvalidationReason:
+        session.reviewInvalidationReason === "household-size-changed"
+          ? "household-size-changed"
+          : null,
       updatedAt: confirmedAt,
     });
     persistSession(nextSession);
@@ -277,17 +345,23 @@ export function UnderstandWorkflow() {
       return;
     }
 
-    const completedAt = new Date().toISOString();
-    const nextSession = createUnderstandSession({
-      profile,
-      householdSize: session.householdSize,
-      calculation: session.calculation,
-      ruleReviewState: "complete",
-      thresholdReviewCompletedAt: completedAt,
-      updatedAt: completedAt,
-    });
-    persistSession(nextSession);
-    setAnnouncement("The verified published comparison was reviewed.");
+    try {
+      const completedAt = new Date().toISOString();
+      const nextSession = acknowledgeUnderstandReview(
+        profile,
+        session,
+        completedAt,
+        frozen2026MtspCorpus,
+      );
+      focusContinueAfterReviewRef.current = true;
+      persistSession(nextSession);
+      setUpdateNotice(null);
+      setAnnouncement("Understand review completed. Prepare is now unlocked.");
+    } catch {
+      setAnnouncement(
+        "The comparison could not be acknowledged because a current verified prerequisite is missing.",
+      );
+    }
   }
 
   if (accessState !== "ready" || !profile || !session) {
@@ -324,7 +398,8 @@ export function UnderstandWorkflow() {
   } else if (progress.hasUnresolvedRuleDataErrors) {
     continueMessage = MISSING_OFFICIAL_2026_THRESHOLD_MESSAGE;
   } else if (!progress.ruleReviewComplete) {
-    continueMessage = "Review and confirm the verified published comparison.";
+    continueMessage =
+      "Acknowledge that you reviewed the comparison and official source.";
   } else if (progress.understandComplete) {
     continueMessage = "Understand requirements are complete. You can continue to Prepare.";
   }
@@ -364,9 +439,10 @@ export function UnderstandWorkflow() {
         onConfirmReview={handleRuleReviewConfirm}
       />
       <RulesAssistant
-        key={`${frozen2026MtspCorpus.corpusId}:${frozen2026MtspCorpus.sourceVersion}:${session.householdSize?.value ?? "unconfirmed"}`}
+        key={`${frozen2026MtspCorpus.corpusId}:${frozen2026MtspCorpus.sourceVersion}:${session.householdSize?.value ?? "unconfirmed"}:${session.calculation?.inputFingerprint ?? "no-calculation"}`}
         corpus={frozen2026MtspCorpus}
         householdSize={session.householdSize?.value}
+        calculation={session.calculation}
       />
 
       <nav
@@ -388,6 +464,7 @@ export function UnderstandWorkflow() {
             {continueMessage}
           </p>
           <button
+            ref={continueButtonRef}
             type="button"
             disabled={!progress.understandComplete}
             aria-describedby="continue-prepare-help"

@@ -14,17 +14,64 @@ type RuleCitationProps = {
 };
 
 function verificationLabel(
-  status: RulesAssistantCitation["verificationStatus"],
+  citation: RulesAssistantCitation,
 ): string {
-  if (status === "verified") {
+  if (
+    citation.verificationStatus === "verified_official" &&
+    citation.sourceType === "official-hud-data"
+  ) {
+    return "Verified official HUD source";
+  }
+
+  if (citation.sourceType === "product-arithmetic") {
+    return "HousingReady Copilot product arithmetic — not an official HUD source";
+  }
+
+  if (citation.sourceType === "product-policy") {
+    return "HousingReady Copilot prototype policy — not an official HUD source";
+  }
+
+  if (citation.verificationStatus === "verified") {
     return "Verified source";
   }
 
-  if (status === "template") {
+  if (citation.verificationStatus === "template") {
     return "Template data — not official";
   }
 
   return "Unverified source — not official";
+}
+
+function sourceCategoryLabel(
+  sourceType: RulesAssistantCitation["sourceType"],
+): string {
+  if (sourceType === "official-hud-data" || sourceType === "official-rule") {
+    return "A. Official HUD data";
+  }
+
+  if (sourceType === "product-arithmetic") {
+    return "B. Product arithmetic";
+  }
+
+  if (sourceType === "product-policy" || sourceType === "application-policy") {
+    return "C. HousingReady Copilot safety and decision-boundary policy";
+  }
+
+  return "Legacy local-corpus source";
+}
+
+function formatEffectiveDate(value: string | null): string {
+  if (!value) {
+    return "Not applicable to this product-authored material";
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "long",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 export function RuleCitation({ citation }: RuleCitationProps) {
@@ -34,7 +81,9 @@ export function RuleCitation({ citation }: RuleCitationProps) {
     citation.citationId.replace(/[^a-z0-9]/gi, "-") +
     "-" +
     instanceId;
-  const isVerified = citation.verificationStatus === "verified";
+  const isVerifiedOfficial =
+    citation.verificationStatus === "verified_official" &&
+    citation.sourceType === "official-hud-data";
   const safeSourceUrl =
     citation.sourceUrl?.startsWith("https://") ||
     /^\/[A-Za-z0-9/_-]*$/.test(citation.sourceUrl ?? "")
@@ -59,23 +108,29 @@ export function RuleCitation({ citation }: RuleCitationProps) {
         <span
           className={
             "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold " +
-            (isVerified
+            (isVerifiedOfficial
               ? "bg-brand-soft text-brand-dark"
               : "bg-sun-soft text-amber-900")
           }
         >
-          {isVerified ? (
+          {isVerifiedOfficial ? (
             <BadgeCheck aria-hidden="true" size={15} />
           ) : citation.verificationStatus === "template" ? (
             <FileWarning aria-hidden="true" size={15} />
           ) : (
             <CircleAlert aria-hidden="true" size={15} />
           )}
-          {verificationLabel(citation.verificationStatus)}
+          {verificationLabel(citation)}
         </span>
       </div>
 
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <dt className="font-semibold text-slate-500">Source category</dt>
+          <dd className="mt-1 font-bold text-ink">
+            {sourceCategoryLabel(citation.sourceType)}
+          </dd>
+        </div>
         <div>
           <dt className="font-semibold text-slate-500">Source publisher</dt>
           <dd className="mt-1 font-bold text-ink">
@@ -89,7 +144,7 @@ export function RuleCitation({ citation }: RuleCitationProps) {
         <div>
           <dt className="font-semibold text-slate-500">Effective date</dt>
           <dd className="mt-1 font-bold text-ink">
-            {citation.effectiveDate ?? "Not loaded"}
+            {formatEffectiveDate(citation.effectiveDate)}
           </dd>
         </div>
         <div>
@@ -122,11 +177,12 @@ export function RuleCitation({ citation }: RuleCitationProps) {
         <a
           href={safeSourceUrl}
           target={isExternal ? "_blank" : undefined}
-          rel={isExternal ? "noreferrer" : undefined}
+          rel={isExternal ? "noopener noreferrer" : undefined}
           className="link-focus mt-4 inline-flex min-h-10 items-center gap-2 text-sm font-bold text-brand hover:text-brand-dark"
         >
           Open source for {citation.sourceTitle}
           {isExternal ? <ExternalLink aria-hidden="true" size={16} /> : null}
+          {isExternal ? <span className="sr-only"> (opens in a new tab)</span> : null}
         </a>
       ) : (
         <p className="mt-4 text-sm font-semibold text-amber-900">

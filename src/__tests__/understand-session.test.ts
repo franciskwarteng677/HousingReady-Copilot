@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  makeCompleteIncomeProfile,
-  makeVerifiedRuleCorpus,
-} from "@/__tests__/fixtures";
+import { makeCompleteIncomeProfile } from "@/__tests__/fixtures";
 import { frozen2026MtspCorpus } from "@/data/rules";
+import { applyConfirmedProfileCorrection } from "@/lib/profile-corrections";
 import { createProfileFingerprint } from "@/lib/profile-fingerprint";
 import {
+  acknowledgeUnderstandReview,
   confirmHouseholdSize,
   createUnderstandSession,
   invalidateUnderstandSessionForProfileChange,
@@ -17,12 +16,12 @@ import {
   buildIncomeCalculation,
   getUnderstandProgress,
 } from "@/lib/understand-state";
+import type { ProfileSession } from "@/lib/profile-schema";
 
 const CREATED_AT = "2026-07-18T14:00:00.000Z";
+const REVIEWED_AT = "2026-07-18T14:05:00.000Z";
 
-function expectCalculation(
-  profile: ReturnType<typeof makeCompleteIncomeProfile>,
-) {
+function expectCalculation(profile: ProfileSession) {
   const result = buildIncomeCalculation(profile, CREATED_AT);
   if (result.outcome !== "calculated") {
     throw new Error("The complete income Profile fixture should calculate.");
@@ -30,46 +29,69 @@ function expectCalculation(
   return result.calculation;
 }
 
+function makePendingUnderstandSession(
+  profile: ProfileSession,
+  householdSize = 2 as const,
+) {
+  return createUnderstandSession({
+    profile,
+    householdSize: confirmHouseholdSize(householdSize, CREATED_AT),
+    calculation: expectCalculation(profile),
+    ruleReviewState: "pending-review",
+    updatedAt: CREATED_AT,
+  });
+}
+
+function makeCompletedUnderstandSession(profile: ProfileSession) {
+  return acknowledgeUnderstandReview(
+    profile,
+    makePendingUnderstandSession(profile),
+    REVIEWED_AT,
+  );
+}
+
 describe("Understand temporary session", () => {
   it("records household size only through explicit confirmation", () => {
-    const confirmation = confirmHouseholdSize(3, CREATED_AT);
-
-    expect(confirmation).toEqual({
+    expect(confirmHouseholdSize(3, CREATED_AT)).toEqual({
       value: 3,
       confirmedAt: CREATED_AT,
     });
   });
 
-  it("invalidates a stale calculation when the confirmed Profile changes", () => {
+  it("invalidates the calculation and acknowledgement when the confirmed Profile changes", () => {
     const originalProfile = makeCompleteIncomeProfile();
-    const originalCalculation = expectCalculation(originalProfile);
-    const originalSession = createUnderstandSession({
-      profile: originalProfile,
-      householdSize: confirmHouseholdSize(2, CREATED_AT),
-      calculation: originalCalculation,
-      ruleReviewState: "blocked-missing-verified-data",
-      updatedAt: CREATED_AT,
-    });
-    saveUnderstandSession(window.sessionStorage, originalSession);
+    saveUnderstandSession(
+      window.sessionStorage,
+      makeCompletedUnderstandSession(originalProfile),
+    );
 
-    const correctedProfile = makeCompleteIncomeProfile({
-      grossPay: "$1,700.00",
-      updatedAt: "2026-07-18T15:00:00.000Z",
-    });
+    const correction = applyConfirmedProfileCorrection(
+      originalProfile,
+      "employment.grossPay.currentPeriod",
+      "$1,700.00",
+      "2026-07-18T15:00:00.000Z",
+    );
+    if (!correction.ok) {
+      throw new Error(correction.error);
+    }
+
     const invalidated = invalidateUnderstandSessionForProfileChange(
       window.sessionStorage,
-      correctedProfile,
+      correction.session,
       "2026-07-18T15:01:00.000Z",
     );
     const staleSession = loadUnderstandSession(window.sessionStorage);
 
     expect(invalidated).toBe(true);
     expect(staleSession).toMatchObject({
-      profileFingerprint: createProfileFingerprint(correctedProfile),
+      profileFingerprint: createProfileFingerprint(correction.session),
+      profileRevision: 2,
       profileStale: true,
       calculation: null,
+      ruleReviewState: "pending-review",
+      reviewAcknowledgement: null,
+      reviewInvalidationReason: "profile-changed",
       understandComplete: false,
-      thresholdReviewCompletedAt: null,
       previousCalculationInputs: {
         grossPayValue: "$1,620.00",
         payFrequencyValue: "Biweekly",
@@ -77,19 +99,13 @@ describe("Understand temporary session", () => {
       },
     });
     expect(
-      loadCurrentUnderstandSession(window.sessionStorage, correctedProfile),
+      loadCurrentUnderstandSession(window.sessionStorage, correction.session),
     ).toBeNull();
   });
 
-  it("does not invalidate a session when the confirmed Profile projection is unchanged", () => {
+  it("does not invalidate a session when neither Profile values nor revision changed", () => {
     const profile = makeCompleteIncomeProfile();
-    const session = createUnderstandSession({
-      profile,
-      householdSize: null,
-      calculation: expectCalculation(profile),
-      ruleReviewState: "blocked-missing-verified-data",
-      updatedAt: CREATED_AT,
-    });
+    const session = makePendingUnderstandSession(profile);
     saveUnderstandSession(window.sessionStorage, session);
 
     expect(
@@ -107,13 +123,7 @@ describe("Understand temporary session", () => {
 
   it("rejects a stored Understand review from a different corpus version", () => {
     const profile = makeCompleteIncomeProfile();
-    const session = createUnderstandSession({
-      profile,
-      householdSize: confirmHouseholdSize(2, CREATED_AT),
-      calculation: expectCalculation(profile),
-      ruleReviewState: "blocked-missing-verified-data",
-      updatedAt: CREATED_AT,
-    });
+    const session = makePendingUnderstandSession(profile);
     saveUnderstandSession(window.sessionStorage, {
       ...session,
       corpusVersion: "superseded-corpus-version",
@@ -126,13 +136,7 @@ describe("Understand temporary session", () => {
 
   it("rejects a stored calculation whose deterministic result was altered", () => {
     const profile = makeCompleteIncomeProfile();
-    const session = createUnderstandSession({
-      profile,
-      householdSize: confirmHouseholdSize(2, CREATED_AT),
-      calculation: expectCalculation(profile),
-      ruleReviewState: "blocked-missing-verified-data",
-      updatedAt: CREATED_AT,
-    });
+    const session = makePendingUnderstandSession(profile);
     if (!session.calculation) {
       throw new Error("Expected a deterministic calculation fixture.");
     }
@@ -154,14 +158,7 @@ describe("Understand temporary session", () => {
 
   it("serializes only allowlisted Understand state", () => {
     const profile = makeCompleteIncomeProfile();
-    const session = createUnderstandSession({
-      profile,
-      householdSize: confirmHouseholdSize(2, CREATED_AT),
-      calculation: expectCalculation(profile),
-      ruleReviewState: "blocked-missing-verified-data",
-      updatedAt: CREATED_AT,
-    });
-    const serialized = JSON.stringify(session);
+    const serialized = JSON.stringify(makeCompletedUnderstandSession(profile));
 
     expect(serialized).not.toContain("sourceText");
     expect(serialized).not.toContain("citationPassages");
@@ -171,35 +168,14 @@ describe("Understand temporary session", () => {
 });
 
 describe("Understand completion gate", () => {
-  it("remains incomplete until household, current calculation, verified data, and review are complete", () => {
+  it("cannot complete before explicit acknowledgement", () => {
     const profile = makeCompleteIncomeProfile();
-    const calculation = expectCalculation(profile);
-    const verifiedCorpus = makeVerifiedRuleCorpus();
-    const householdSize = confirmHouseholdSize(2, CREATED_AT);
+    const pendingReview = makePendingUnderstandSession(profile);
 
-    const withoutHousehold = createUnderstandSession({
-      profile,
-      householdSize: null,
-      calculation,
-      ruleReviewState: "blocked-missing-verified-data",
-      corpus: verifiedCorpus,
-      updatedAt: CREATED_AT,
-    });
+    expect(pendingReview.reviewAcknowledgement).toBeNull();
+    expect(pendingReview.understandComplete).toBe(false);
     expect(
-      getUnderstandProgress(profile, withoutHousehold, verifiedCorpus)
-        .understandComplete,
-    ).toBe(false);
-
-    const pendingReview = createUnderstandSession({
-      profile,
-      householdSize,
-      calculation,
-      ruleReviewState: "pending-review",
-      corpus: verifiedCorpus,
-      updatedAt: CREATED_AT,
-    });
-    expect(
-      getUnderstandProgress(profile, pendingReview, verifiedCorpus),
+      getUnderstandProgress(profile, pendingReview, frozen2026MtspCorpus),
     ).toMatchObject({
       profileComplete: true,
       householdSizeConfirmed: true,
@@ -207,45 +183,42 @@ describe("Understand completion gate", () => {
       calculationCurrent: true,
       verifiedRuleDataAvailable: true,
       ruleReviewComplete: false,
+      hasUnresolvedRuleDataErrors: false,
       understandComplete: false,
     });
-
-    const complete = createUnderstandSession({
-      profile,
-      householdSize,
-      calculation,
-      ruleReviewState: "complete",
-      thresholdReviewCompletedAt: CREATED_AT,
-      corpus: verifiedCorpus,
-      updatedAt: CREATED_AT,
-    });
-    expect(complete.understandComplete).toBe(true);
-    expect(getUnderstandProgress(profile, complete, verifiedCorpus)).toMatchObject(
-      {
-        ruleReviewComplete: true,
-        hasUnresolvedRuleDataErrors: false,
-        understandComplete: true,
-      },
-    );
   });
 
-  it("stays blocked when the organizer-provided official threshold data is missing", () => {
+  it("completes only after acknowledgement and persists its exact review metadata", () => {
     const profile = makeCompleteIncomeProfile();
-    const session = createUnderstandSession({
-      profile,
-      householdSize: confirmHouseholdSize(2, CREATED_AT),
-      calculation: expectCalculation(profile),
-      ruleReviewState: "blocked-missing-verified-data",
-      updatedAt: CREATED_AT,
-    });
+    const complete = makeCompletedUnderstandSession(profile);
 
-    expect(getUnderstandProgress(profile, session, frozen2026MtspCorpus)).toMatchObject(
-      {
-        verifiedRuleDataAvailable: false,
-        hasUnresolvedRuleDataErrors: true,
-        ruleReviewComplete: false,
-        understandComplete: false,
-      },
+    expect(complete.reviewAcknowledgement).toEqual({
+      acknowledgedAt: REVIEWED_AT,
+      profileRevision: profile.revision,
+      profileFingerprint: createProfileFingerprint(profile),
+      householdSize: 2,
+      calculationInputFingerprint: complete.calculation?.inputFingerprint,
+      thresholdSourceId: frozen2026MtspCorpus.corpusId,
+      thresholdSourceVersion: frozen2026MtspCorpus.sourceVersion,
+    });
+    expect(complete.understandComplete).toBe(true);
+    expect(
+      getUnderstandProgress(profile, complete, frozen2026MtspCorpus),
+    ).toMatchObject({
+      ruleReviewComplete: true,
+      hasUnresolvedRuleDataErrors: false,
+      understandComplete: true,
+    });
+  });
+
+  it("allows an above-threshold amount to complete after review", () => {
+    const profile = makeCompleteIncomeProfile({ grossPay: "$3,000.00" });
+    const complete = makeCompletedUnderstandSession(profile);
+
+    expect(complete.calculation?.combined.resultCents).toBe(8_580_000);
+    expect(complete.calculation?.combined.resultCents).toBeGreaterThan(
+      8_232_000,
     );
+    expect(complete.understandComplete).toBe(true);
   });
 });

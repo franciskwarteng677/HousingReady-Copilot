@@ -4,6 +4,7 @@ import {
 } from "@/data/rules";
 import {
   calculateAnnualizedIncome,
+  formatCurrencyFromCents,
 } from "@/lib/income-calculation";
 import {
   createProfileFingerprint,
@@ -171,9 +172,12 @@ export type ThresholdComparisonResult =
       householdSize: HouseholdSize;
       combinedAnnualizedCents: number;
       publishedThresholdCents: number;
+      differenceCents: number;
       relation: "below" | "equal" | "above";
       mathematicalComparison: string;
+      differenceCalculation: string;
       neutralStatement: string;
+      thresholdType: "60% MTSP";
       sourceVersion: string;
       effectiveDate: string;
       citationId: string;
@@ -201,21 +205,37 @@ export function compareVerifiedThreshold(
       : combinedAnnualizedCents > publishedThresholdCents
         ? "above"
         : "equal";
+  const differenceCents = Math.abs(
+    publishedThresholdCents - combinedAnnualizedCents,
+  );
+  const formattedDifference = formatCurrencyFromCents(differenceCents);
   const neutralStatement =
     relation === "equal"
-      ? "The confirmed annualised amount is numerically equal to the displayed published threshold."
-      : `The confirmed annualised amount is numerically ${relation} the displayed published threshold.`;
+      ? "The confirmed annualised amount is equal to the displayed 60% MTSP reference threshold."
+      : `The confirmed annualised amount is ${formattedDifference} ${relation} the displayed 60% MTSP reference threshold.`;
+  const formattedAmount = formatCurrencyFromCents(combinedAnnualizedCents);
+  const formattedThreshold = formatCurrencyFromCents(
+    publishedThresholdCents,
+  );
 
   return {
     outcome: "available",
     householdSize,
     combinedAnnualizedCents,
     publishedThresholdCents,
+    differenceCents,
     relation,
-    mathematicalComparison: `${combinedAnnualizedCents} cents ${
+    mathematicalComparison: `${formattedAmount} ${
       relation === "below" ? "<" : relation === "above" ? ">" : "="
-    } ${publishedThresholdCents} cents`,
+    } ${formattedThreshold}`,
+    differenceCalculation:
+      relation === "below"
+        ? `${formattedThreshold} − ${formattedAmount} = ${formattedDifference}`
+        : relation === "above"
+          ? `${formattedAmount} − ${formattedThreshold} = ${formattedDifference}`
+          : `${formattedAmount} − ${formattedThreshold} = $0.00`,
     neutralStatement,
+    thresholdType: "60% MTSP",
     sourceVersion: verified.sourceVersion,
     effectiveDate: verified.effectiveDate,
     citationId: verified.citation.citationId,
@@ -233,6 +253,50 @@ export type UnderstandProgress = {
   understandComplete: boolean;
 };
 
+export function isUnderstandReviewCurrent(
+  profile: ProfileSession | null,
+  session: UnderstandSession | null,
+  corpus: RuleCorpus,
+): boolean {
+  if (
+    !isCompletedProfileSession(profile) ||
+    !profile ||
+    !session ||
+    !session.householdSize ||
+    !session.calculation ||
+    session.profileStale ||
+    session.ruleReviewState !== "complete" ||
+    !session.reviewAcknowledgement
+  ) {
+    return false;
+  }
+
+  const expectedFingerprint = createProfileFingerprint(profile);
+  const acknowledgement = session.reviewAcknowledgement;
+  const verifiedThreshold = getVerifiedThresholdComparisonData(
+    corpus,
+    session.householdSize.value,
+  );
+
+  return Boolean(
+    verifiedThreshold &&
+      session.programIdentifier === corpus.programIdentifier &&
+      session.corpusId === corpus.corpusId &&
+      session.corpusVersion === corpus.sourceVersion &&
+      session.profileRevision === profile.revision &&
+      session.profileFingerprint === expectedFingerprint &&
+      session.calculation.profileFingerprint === expectedFingerprint &&
+      isStoredCalculationValidForProfile(profile, session.calculation) &&
+      acknowledgement.profileRevision === profile.revision &&
+      acknowledgement.profileFingerprint === expectedFingerprint &&
+      acknowledgement.householdSize === session.householdSize.value &&
+      acknowledgement.calculationInputFingerprint ===
+        session.calculation.inputFingerprint &&
+      acknowledgement.thresholdSourceId === corpus.corpusId &&
+      acknowledgement.thresholdSourceVersion === corpus.sourceVersion,
+  );
+}
+
 export function getUnderstandProgress(
   profile: ProfileSession | null,
   session: UnderstandSession | null,
@@ -247,6 +311,7 @@ export function getUnderstandProgress(
       profile &&
       session &&
       !session.profileStale &&
+      session.profileRevision === profile.revision &&
       session.profileFingerprint === expectedFingerprint &&
       session.calculation?.profileFingerprint === expectedFingerprint &&
       session.calculation &&
@@ -268,11 +333,9 @@ export function getUnderstandProgress(
         session.householdSize.value,
       ),
   );
-  const ruleReviewComplete = Boolean(
-    session?.ruleReviewState === "complete" &&
-      session.thresholdReviewCompletedAt &&
-      verifiedRuleDataAvailable,
-  );
+  const ruleReviewComplete =
+    verifiedRuleDataAvailable &&
+    isUnderstandReviewCurrent(profile, session, corpus);
   const hasUnresolvedRuleDataErrors = !verifiedRuleDataAvailable;
   const understandComplete = Boolean(
     profileComplete &&

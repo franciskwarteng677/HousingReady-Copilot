@@ -9,10 +9,28 @@ export const understandRuleReviewStateSchema = z.enum([
   "complete",
 ]);
 
+export const understandReviewInvalidationReasonSchema = z.enum([
+  "profile-changed",
+  "household-size-changed",
+  "threshold-source-changed",
+]);
+
 export const householdSizeConfirmationSchema = z
   .object({
     value: householdSizeSchema,
     confirmedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const understandReviewAcknowledgementSchema = z
+  .object({
+    acknowledgedAt: z.string().datetime(),
+    profileRevision: z.number().int().positive(),
+    profileFingerprint: z.string().min(1),
+    householdSize: householdSizeSchema,
+    calculationInputFingerprint: z.string().min(1),
+    thresholdSourceId: z.string().min(1),
+    thresholdSourceVersion: z.string().min(1),
   })
   .strict();
 
@@ -87,17 +105,20 @@ export const storedIncomeCalculationSchema = z
 
 export const understandSessionSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     programIdentifier: z.string().min(1),
     corpusId: z.string().min(1),
     corpusVersion: z.string().min(1),
     profileFingerprint: z.string().min(1),
+    profileRevision: z.number().int().positive(),
     householdSize: householdSizeConfirmationSchema.nullable(),
     calculation: storedIncomeCalculationSchema.nullable(),
     previousCalculationInputs: calculationInputSnapshotSchema.nullable(),
     profileStale: z.boolean(),
     ruleReviewState: understandRuleReviewStateSchema,
-    thresholdReviewCompletedAt: z.string().datetime().nullable(),
+    reviewAcknowledgement: understandReviewAcknowledgementSchema.nullable(),
+    reviewInvalidationReason:
+      understandReviewInvalidationReasonSchema.nullable(),
     understandComplete: z.boolean(),
     updatedAt: z.string().datetime(),
   })
@@ -108,6 +129,14 @@ export const understandSessionSchema = z
         code: "custom",
         message: "A stale session cannot retain a calculation result.",
         path: ["calculation"],
+      });
+    }
+
+    if (session.profileStale && session.reviewAcknowledgement !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "A stale session cannot retain a review acknowledgement.",
+        path: ["reviewAcknowledgement"],
       });
     }
 
@@ -124,13 +153,93 @@ export const understandSessionSchema = z
 
     if (
       session.ruleReviewState === "complete" &&
-      session.thresholdReviewCompletedAt === null
+      session.reviewAcknowledgement === null
     ) {
       context.addIssue({
         code: "custom",
-        message: "A completed rule review must record its completion time.",
-        path: ["thresholdReviewCompletedAt"],
+        message: "A completed rule review must record its acknowledgement.",
+        path: ["reviewAcknowledgement"],
       });
+    }
+
+    if (
+      session.ruleReviewState !== "complete" &&
+      session.reviewAcknowledgement !== null
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "A pending rule review cannot retain an acknowledgement.",
+        path: ["reviewAcknowledgement"],
+      });
+    }
+
+    if (session.reviewAcknowledgement !== null) {
+      const acknowledgement = session.reviewAcknowledgement;
+
+      if (
+        session.householdSize === null ||
+        acknowledgement.householdSize !== session.householdSize.value
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "The acknowledgement must match the confirmed household size.",
+          path: ["reviewAcknowledgement", "householdSize"],
+        });
+      }
+
+      if (acknowledgement.profileRevision !== session.profileRevision) {
+        context.addIssue({
+          code: "custom",
+          message: "The acknowledgement must match the current Profile revision.",
+          path: ["reviewAcknowledgement", "profileRevision"],
+        });
+      }
+
+      if (acknowledgement.profileFingerprint !== session.profileFingerprint) {
+        context.addIssue({
+          code: "custom",
+          message: "The acknowledgement must match the current Profile values.",
+          path: ["reviewAcknowledgement", "profileFingerprint"],
+        });
+      }
+
+      if (
+        session.calculation === null ||
+        acknowledgement.calculationInputFingerprint !==
+          session.calculation.inputFingerprint
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "The acknowledgement must match the current calculation inputs.",
+          path: ["reviewAcknowledgement", "calculationInputFingerprint"],
+        });
+      }
+
+      if (acknowledgement.thresholdSourceId !== session.corpusId) {
+        context.addIssue({
+          code: "custom",
+          message: "The acknowledgement must match the threshold source.",
+          path: ["reviewAcknowledgement", "thresholdSourceId"],
+        });
+      }
+
+      if (
+        acknowledgement.thresholdSourceVersion !== session.corpusVersion
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "The acknowledgement must match the threshold source version.",
+          path: ["reviewAcknowledgement", "thresholdSourceVersion"],
+        });
+      }
+
+      if (session.reviewInvalidationReason !== null) {
+        context.addIssue({
+          code: "custom",
+          message: "A current acknowledgement cannot retain a stale-review reason.",
+          path: ["reviewInvalidationReason"],
+        });
+      }
     }
 
     if (
@@ -139,7 +248,7 @@ export const understandSessionSchema = z
         session.householdSize === null ||
         session.calculation === null ||
         session.ruleReviewState !== "complete" ||
-        session.thresholdReviewCompletedAt === null)
+        session.reviewAcknowledgement === null)
     ) {
       context.addIssue({
         code: "custom",
@@ -152,8 +261,14 @@ export const understandSessionSchema = z
 export type UnderstandRuleReviewState = z.infer<
   typeof understandRuleReviewStateSchema
 >;
+export type UnderstandReviewInvalidationReason = z.infer<
+  typeof understandReviewInvalidationReasonSchema
+>;
 export type HouseholdSizeConfirmation = z.infer<
   typeof householdSizeConfirmationSchema
+>;
+export type UnderstandReviewAcknowledgement = z.infer<
+  typeof understandReviewAcknowledgementSchema
 >;
 export type CalculationInputEvidence = z.infer<
   typeof calculationInputEvidenceSchema

@@ -1,8 +1,9 @@
-import { Database, MapPinned, ShieldAlert } from "lucide-react";
+import { BadgeCheck, Database, MapPinned, ShieldAlert } from "lucide-react";
 import {
   FROZEN_GEOGRAPHY,
   FROZEN_PROGRAM_NAME,
   FROZEN_RULE_YEAR,
+  PRIMARY_COMPARISON_LABEL,
 } from "@/data/rules";
 import type { RuleCorpus } from "@/lib/rules-schema";
 
@@ -71,18 +72,40 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
               <Database aria-hidden="true" size={15} />
               Source type
             </dt>
-            <dd className="mt-2 font-bold leading-6">
-              Hack-Nation organizer-provided frozen 2026 MTSP limits and
-              official rule corpus
+            <dd className="mt-2 flex items-start gap-2 font-bold leading-6">
+              <BadgeCheck
+                aria-hidden="true"
+                size={18}
+                className="mt-0.5 shrink-0 text-teal-200"
+              />
+              Verified official HUD FY 2026 MTSP source
             </dd>
             <p className="mt-2 flex items-start gap-2 text-sm leading-6 text-slate-300">
               <ShieldAlert aria-hidden="true" size={17} className="mt-0.5 shrink-0" />
-              Current corpus status: {corpus.dataVerificationStatus}. Template
-              material is never labeled as official.
+              The official HUD values are frozen locally for this prototype;
+              the demo does not depend on a live network request.
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/10 p-4 sm:col-span-2">
+            <dt className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
+              Primary reference comparison
+            </dt>
+            <dd className="mt-2 font-bold leading-6">
+              {PRIMARY_COMPARISON_LABEL}
+            </dd>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              This 60% value is the reference threshold selected for the frozen
+              prototype scenario. Different properties, set-asides, project
+              histories, programs, or rules may require different limits.
             </p>
           </div>
         </dl>
       </div>
+      {corpus.dataVerificationStatus !== "verified_official" ? (
+        <p className="border-t border-white/15 px-5 py-4 text-sm font-bold text-amber-200 sm:px-7">
+          Status: the loaded corpus is not a verified official HUD source.
+        </p>
+      ) : null}
     </section>
   );
 }

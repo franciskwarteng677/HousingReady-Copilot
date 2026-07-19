@@ -1,5 +1,9 @@
-import { frozen2026MtspCorpus } from "@/data/rules";
+import {
+  frozen2026MtspCorpus,
+  getVerifiedThresholdComparisonData,
+} from "@/data/rules";
 import { createProfileFingerprint } from "@/lib/profile-fingerprint";
+import { invalidatePrepareSessionForUnderstandChange } from "@/lib/prepare-session";
 import type { ProfileSession } from "@/lib/profile-schema";
 import type { HouseholdSize, RuleCorpus } from "@/lib/rules-schema";
 import {
@@ -12,11 +16,14 @@ import {
   type CalculationInputSnapshot,
   type HouseholdSizeConfirmation,
   type StoredIncomeCalculation,
+  type UnderstandReviewAcknowledgement,
+  type UnderstandReviewInvalidationReason,
   type UnderstandRuleReviewState,
   type UnderstandSession,
 } from "@/lib/understand-schema";
 
-export const UNDERSTAND_SESSION_KEY = "housingready:understand:v1";
+export const UNDERSTAND_SESSION_KEY = "housingready:understand:v2";
+export const LEGACY_UNDERSTAND_SESSION_KEY = "housingready:understand:v1";
 export const UNDERSTAND_UPDATED_EVENT = "housingready:understand-updated";
 
 export type CreateUnderstandSessionInput = {
@@ -26,7 +33,8 @@ export type CreateUnderstandSessionInput = {
   previousCalculationInputs?: CalculationInputSnapshot | null;
   profileStale?: boolean;
   ruleReviewState: UnderstandRuleReviewState;
-  thresholdReviewCompletedAt?: string | null;
+  reviewAcknowledgement?: UnderstandReviewAcknowledgement | null;
+  reviewInvalidationReason?: UnderstandReviewInvalidationReason | null;
   corpus?: RuleCorpus;
   updatedAt: string;
 };
@@ -38,23 +46,26 @@ export function createUnderstandSession({
   previousCalculationInputs = null,
   profileStale = false,
   ruleReviewState,
-  thresholdReviewCompletedAt = null,
+  reviewAcknowledgement = null,
+  reviewInvalidationReason = null,
   corpus = frozen2026MtspCorpus,
   updatedAt,
 }: CreateUnderstandSessionInput): UnderstandSession {
   const profileFingerprint = createProfileFingerprint(profile);
   const provisional = understandSessionSchema.parse({
-    version: 1,
+    version: 2,
     programIdentifier: corpus.programIdentifier,
     corpusId: corpus.corpusId,
     corpusVersion: corpus.sourceVersion,
     profileFingerprint,
+    profileRevision: profile.revision,
     householdSize,
     calculation,
     previousCalculationInputs,
     profileStale,
     ruleReviewState,
-    thresholdReviewCompletedAt,
+    reviewAcknowledgement,
+    reviewInvalidationReason,
     understandComplete: false,
     updatedAt,
   });
@@ -70,9 +81,11 @@ export function saveUnderstandSession(
   storage: Storage,
   session: UnderstandSession,
 ): void {
+  const validated = understandSessionSchema.parse(session);
+  invalidatePrepareSessionForUnderstandChange(storage, validated);
   storage.setItem(
     UNDERSTAND_SESSION_KEY,
-    JSON.stringify(understandSessionSchema.parse(session)),
+    JSON.stringify(validated),
   );
 }
 
@@ -82,6 +95,7 @@ export function loadUnderstandSession(
   const serialized = storage.getItem(UNDERSTAND_SESSION_KEY);
 
   if (!serialized) {
+    storage.removeItem(LEGACY_UNDERSTAND_SESSION_KEY);
     return null;
   }
 
@@ -107,6 +121,7 @@ export function loadCurrentUnderstandSession(
     session.corpusId !== corpus.corpusId ||
     session.corpusVersion !== corpus.sourceVersion ||
     session.profileStale ||
+    session.profileRevision !== profile.revision ||
     session.profileFingerprint !== fingerprint ||
     session.calculation?.profileFingerprint !== fingerprint ||
     !session.calculation ||
@@ -131,6 +146,7 @@ export function invalidateUnderstandSessionForProfileChange(
   const nextFingerprint = createProfileFingerprint(nextProfile);
   if (
     session.profileFingerprint === nextFingerprint &&
+    session.profileRevision === nextProfile.revision &&
     !session.profileStale
   ) {
     return false;
@@ -142,6 +158,7 @@ export function invalidateUnderstandSessionForProfileChange(
   const staleSession = understandSessionSchema.parse({
     ...session,
     profileFingerprint: nextFingerprint,
+    profileRevision: nextProfile.revision,
     calculation: null,
     previousCalculationInputs,
     profileStale: true,
@@ -149,7 +166,8 @@ export function invalidateUnderstandSessionForProfileChange(
       session.ruleReviewState === "blocked-missing-verified-data"
         ? "blocked-missing-verified-data"
         : "pending-review",
-    thresholdReviewCompletedAt: null,
+    reviewAcknowledgement: null,
+    reviewInvalidationReason: "profile-changed",
     understandComplete: false,
     updatedAt,
   });
@@ -160,6 +178,7 @@ export function invalidateUnderstandSessionForProfileChange(
 
 export function clearUnderstandSession(storage: Storage): void {
   storage.removeItem(UNDERSTAND_SESSION_KEY);
+  storage.removeItem(LEGACY_UNDERSTAND_SESSION_KEY);
 }
 
 export function confirmHouseholdSize(
@@ -170,4 +189,55 @@ export function confirmHouseholdSize(
     value,
     confirmedAt,
   };
+}
+
+export function acknowledgeUnderstandReview(
+  profile: ProfileSession,
+  session: UnderstandSession,
+  reviewedAt: string,
+  corpus: RuleCorpus = frozen2026MtspCorpus,
+): UnderstandSession {
+  const profileFingerprint = createProfileFingerprint(profile);
+  const householdSize = session.householdSize;
+  const calculation = session.calculation;
+  const verifiedThreshold = householdSize
+    ? getVerifiedThresholdComparisonData(corpus, householdSize.value)
+    : null;
+
+  if (
+    !householdSize ||
+    !calculation ||
+    !verifiedThreshold ||
+    session.profileStale ||
+    session.profileFingerprint !== profileFingerprint ||
+    session.profileRevision !== profile.revision ||
+    calculation.profileFingerprint !== profileFingerprint ||
+    !isStoredCalculationValidForProfile(profile, calculation)
+  ) {
+    throw new Error(
+      "A current Profile, calculation, household size, and verified threshold are required before acknowledgement.",
+    );
+  }
+
+  const reviewAcknowledgement = {
+    acknowledgedAt: reviewedAt,
+    profileRevision: profile.revision,
+    profileFingerprint,
+    householdSize: householdSize.value,
+    calculationInputFingerprint: calculation.inputFingerprint,
+    thresholdSourceId: corpus.corpusId,
+    thresholdSourceVersion: corpus.sourceVersion,
+  } satisfies UnderstandReviewAcknowledgement;
+
+  return createUnderstandSession({
+    profile,
+    householdSize,
+    calculation,
+    previousCalculationInputs: session.previousCalculationInputs,
+    ruleReviewState: "complete",
+    reviewAcknowledgement,
+    reviewInvalidationReason: null,
+    corpus,
+    updatedAt: reviewedAt,
+  });
 }
