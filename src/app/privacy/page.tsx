@@ -47,9 +47,9 @@ export default function PrivacyPage() {
             Temporary session processing
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Prototype work is scoped to a temporary browser session. The
-            current upload area is a placeholder and does not extract or save
-            selected files.
+            Prototype work is scoped to a temporary browser session. Files are
+            processed client-side; only confirmed structured fields and
+            document metadata are saved temporarily.
           </p>
         </section>
 

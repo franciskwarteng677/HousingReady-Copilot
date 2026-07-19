@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | HousingReady Copilot",
   },
   description:
-    "Organise synthetic housing application documents, understand published programme rules, and prepare a readiness packet.",
+    "Organize synthetic housing application documents, understand published program rules, and prepare a readiness packet.",
   applicationName: "HousingReady Copilot",
 };
 

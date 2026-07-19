@@ -25,7 +25,7 @@ const features = [
     step: "Stage 2",
     title: "Understand the Rules",
     description:
-      "Read plain-language explanations of published programme rules with transparent calculations and citations.",
+      "Read plain-language explanations of published program rules with transparent calculations and citations.",
     href: "/understand",
     linkLabel: "Explore explanations",
     icon: BookOpenCheck,
@@ -47,7 +47,7 @@ export default function Home() {
       variant="hero"
       eyebrow="Affordable-housing application readiness"
       title="Prepare with confidence. You stay in control."
-      description="HousingReady Copilot helps you organise documents and understand published housing programme rules—without making decisions for you."
+      description="HousingReady Copilot helps you organize documents and understand published housing program rules—without making decisions for you."
       actions={
         <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
           <Link

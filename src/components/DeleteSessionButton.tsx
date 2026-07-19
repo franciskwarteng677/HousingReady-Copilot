@@ -1,29 +1,41 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { SESSION_STORAGE_KEY } from "@/lib/session";
+import {
+  clearHousingReadySession,
+  SESSION_ACTIVE_EVENT,
+  SESSION_DELETED_EVENT,
+} from "@/lib/session";
 
 export function DeleteSessionButton() {
-  const [cleared, setCleared] = useState(false);
+  const router = useRouter();
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     function markSessionActive() {
-      setCleared(false);
+      setDeleted(false);
     }
 
-    window.addEventListener("housingready:session-active", markSessionActive);
+    window.addEventListener(SESSION_ACTIVE_EVENT, markSessionActive);
     return () =>
-      window.removeEventListener(
-        "housingready:session-active",
-        markSessionActive,
-      );
+      window.removeEventListener(SESSION_ACTIVE_EVENT, markSessionActive);
   }, []);
 
   function deleteSession() {
-    window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    window.dispatchEvent(new Event("housingready:session-cleared"));
-    setCleared(true);
+    const confirmed = window.confirm(
+      "Delete this temporary HousingReady session? Confirmed fields, document metadata, and active previews will be cleared. This cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    clearHousingReadySession(window.sessionStorage);
+    window.dispatchEvent(new Event(SESSION_DELETED_EVENT));
+    setDeleted(true);
+    router.replace("/");
   }
 
   return (
@@ -36,13 +48,13 @@ export function DeleteSessionButton() {
         <Trash2 aria-hidden="true" size={17} />
         Delete Session
       </button>
-      {cleared ? (
+      {deleted ? (
         <p
           className="mt-1 text-xs font-semibold text-brand-dark"
           role="status"
           aria-live="polite"
         >
-          Session cleared.
+          Temporary session deleted.
         </p>
       ) : null}
     </div>

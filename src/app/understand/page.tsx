@@ -14,7 +14,7 @@ import { PageContainer } from "@/components/PageContainer";
 export const metadata: Metadata = {
   title: "Understand",
   description:
-    "Confirm household information and understand published housing programme rules.",
+    "Confirm household information and understand published housing program rules.",
 };
 
 const panelClass =
@@ -25,7 +25,7 @@ export default function UnderstandPage() {
     <PageContainer
       eyebrow="Stage 2 of 3 · Understand"
       title="Understand the information and the rules"
-      description="Review confirmed details alongside plain-language explanations of published programme rules. This workspace explains; it never decides."
+      description="Review confirmed details alongside plain-language explanations of published program rules. This workspace explains; it never decides."
     >
       <div className="grid gap-5 lg:grid-cols-2">
         <section aria-labelledby="household-title" className={panelClass}>
@@ -48,14 +48,14 @@ export default function UnderstandPage() {
         <section aria-labelledby="rules-title" className={panelClass}>
           <BookOpenText aria-hidden="true" size={23} className="text-brand" />
           <h2 id="rules-title" className="mt-4 text-xl font-bold text-ink">
-            Programme rules
+            Program rules
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Published rule excerpts and plain-language explanations will be
-            organised here for the programme you choose.
+            organized here for the program you choose.
           </p>
           <p className="mt-5 rounded-xl bg-brand-soft px-4 py-3 text-sm font-semibold text-brand-dark">
-            Status: No programme selected
+            Status: No program selected
           </p>
         </section>
 
@@ -86,7 +86,7 @@ export default function UnderstandPage() {
             name="rule-question"
             rows={3}
             disabled
-            placeholder="Question entry will be available after a programme is selected."
+            placeholder="Question entry will be available after a program is selected."
             className="mt-2 w-full resize-none rounded-xl border border-line bg-slate-50 px-4 py-3 text-sm text-slate-600 disabled:cursor-not-allowed disabled:opacity-100"
           />
         </section>

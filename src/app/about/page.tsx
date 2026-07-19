@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 const supportedTasks = [
-  "Organise synthetic application documents",
+  "Organize synthetic application documents",
   "Help renters confirm extracted information",
-  "Explain published programme rules with citations",
+  "Explain published program rules with citations",
   "Flag missing or expired packet items",
   "Prepare a renter-controlled application packet",
 ];
