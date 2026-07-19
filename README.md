@@ -34,7 +34,7 @@ Quality checks:
 
 - / — product overview
 - /profile — synthetic document upload, preview, extraction evidence, correction, and confirmation
-- /understand — household information, program rules, calculations, and citations
+- /understand — confirmed Profile information, deterministic income arithmetic, frozen rule-corpus retrieval, citations, and threshold-data abstention
 - /prepare — checklist, missing-item review, preview, and download placeholder
 - /privacy — prototype privacy and safety boundaries
 - /about — product purpose and non-goals
@@ -59,9 +59,32 @@ The Profile demo recognizes only the exact committed synthetic PDFs by
 SHA-256 fingerprint. Unknown documents receive a no-call; the prototype does
 not guess values for arbitrary files.
 
-Session storage contains only confirmed structured fields and document
-metadata. Raw files, full document text, images, PDF bytes, and object URLs are
-never persisted.
+Session storage contains only confirmed structured fields, integer-cent money
+values, document metadata, and a minimal revision/correction history. Restored
+values can be corrected without re-uploading a file. Raw files, full document
+text, source excerpts, images, PDF bytes, and object URLs are never persisted.
+
+If a sample is re-uploaded after a renter correction, its fresh demo extraction
+is reconciled against the saved Profile. A difference never overwrites the
+confirmed value automatically; the renter must explicitly retain the correction
+or restore the extracted sample value.
+
+The Understand stage additionally stores only renter-confirmed household size,
+the frozen program/corpus identifiers, deterministic calculation inputs and
+results, and rule-review completion state. Questions and answer history are not
+persisted.
+
+## Frozen 2026 rule corpus
+
+The prototype is limited to Cambridge, Massachusetts, the
+Boston-Cambridge-Quincy, MA-NH HUD Metro FMR Area, the LIHTC/MTSP context, and
+rule year 2026. Rule data lives in `src/data/rules`.
+
+`src/data/rules/organizer-pack.template.json` contains eight intentionally null
+household-size thresholds. Follow `src/data/rules/README.md` to add and activate
+the verified Hack-Nation organizer pack. Until that pack is loaded, the app
+performs only the transparent Profile arithmetic, abstains from threshold
+questions, keeps the official comparison blocked, and does not unlock Prepare.
 
 ## Synthetic sample PDFs
 

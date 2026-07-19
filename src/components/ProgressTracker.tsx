@@ -1,34 +1,58 @@
 "use client";
 
-import { LockKeyhole } from "lucide-react";
+import { Check, LockKeyhole } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { progressSteps } from "@/data/progress-steps";
+import { frozen2026MtspCorpus } from "@/data/rules";
+import { isCompletedProfileSession } from "@/lib/profile-fingerprint";
 import {
   loadProfileSession,
   PROFILE_UPDATED_EVENT,
   SESSION_DELETED_EVENT,
 } from "@/lib/session";
+import {
+  loadCurrentUnderstandSession,
+  UNDERSTAND_UPDATED_EVENT,
+} from "@/lib/understand-session";
+import { getUnderstandProgress } from "@/lib/understand-state";
 
 export function ProgressTracker() {
   const pathname = usePathname();
   const [profileComplete, setProfileComplete] = useState(false);
+  const [understandComplete, setUnderstandComplete] = useState(false);
 
   useEffect(() => {
     function updateProfileState() {
-      setProfileComplete(
-        loadProfileSession(window.sessionStorage)?.profileComplete ?? false,
+      const profile = loadProfileSession(window.sessionStorage);
+      const profileIsComplete = isCompletedProfileSession(profile);
+      const understand =
+        profileIsComplete && profile
+          ? loadCurrentUnderstandSession(window.sessionStorage, profile)
+          : null;
+      const understandProgress = getUnderstandProgress(
+        profile,
+        understand,
+        frozen2026MtspCorpus,
+      );
+
+      setProfileComplete(profileIsComplete);
+      setUnderstandComplete(
+        Boolean(understand?.understandComplete) &&
+          understandProgress.understandComplete,
       );
     }
 
     const timeoutId = window.setTimeout(updateProfileState, 0);
     window.addEventListener(PROFILE_UPDATED_EVENT, updateProfileState);
+    window.addEventListener(UNDERSTAND_UPDATED_EVENT, updateProfileState);
     window.addEventListener(SESSION_DELETED_EVENT, updateProfileState);
 
     return () => {
       window.clearTimeout(timeoutId);
       window.removeEventListener(PROFILE_UPDATED_EVENT, updateProfileState);
+      window.removeEventListener(UNDERSTAND_UPDATED_EVENT, updateProfileState);
       window.removeEventListener(SESSION_DELETED_EVENT, updateProfileState);
     };
   }, []);
@@ -41,36 +65,57 @@ export function ProgressTracker() {
       <ol className="mx-auto grid w-full max-w-7xl grid-cols-3 gap-2 px-4 py-3 sm:gap-3 sm:px-6 lg:px-8">
         {progressSteps.map((step, index) => {
           const isCurrent = pathname === step.href;
-          const isLocked = index > 0 && !profileComplete && !isCurrent;
+          const isCompleted =
+            (index === 0 && profileComplete && !isCurrent) ||
+            (index === 1 && understandComplete && !isCurrent);
+          const isLocked =
+            (index === 1 && !profileComplete) ||
+            (index === 2 && (!profileComplete || !understandComplete));
           const itemClassName = `link-focus flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-center transition-colors sm:min-h-14 sm:flex-row sm:justify-start sm:gap-3 sm:px-4 sm:text-left ${
-            isCurrent
-              ? "border-brand bg-brand-soft text-brand-dark"
-              : isLocked
-                ? "cursor-not-allowed border-transparent bg-slate-50 text-slate-500"
-                : "border-transparent text-slate-600 hover:border-line hover:bg-canvas"
+            isLocked
+              ? "cursor-not-allowed border-transparent bg-slate-50 text-slate-500"
+              : isCurrent
+                ? "border-brand bg-brand-soft text-brand-dark"
+                : isCompleted
+                  ? "border-brand/30 bg-brand-soft/50 text-brand-dark"
+                  : "border-transparent text-slate-600 hover:border-line hover:bg-canvas"
           }`;
           const content = (
             <>
               <span
                 aria-hidden="true"
                 className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold sm:size-8 sm:text-sm ${
-                  isCurrent
+                  isLocked
+                    ? "bg-slate-100 text-slate-500"
+                    : isCurrent
                     ? "bg-brand text-white"
-                    : "bg-slate-100 text-slate-600"
+                      : isCompleted
+                        ? "bg-brand text-white"
+                        : "bg-slate-100 text-slate-600"
                 }`}
               >
-                {isLocked ? <LockKeyhole size={13} /> : index + 1}
+                {isLocked ? (
+                  <LockKeyhole size={13} />
+                ) : isCompleted ? (
+                  <Check size={15} />
+                ) : (
+                  index + 1
+                )}
               </span>
               <span className="min-w-0">
                 <span className="block text-xs font-bold leading-tight sm:text-base">
                   {step.label}
                 </span>
                 <span className="block text-[10px] font-semibold leading-tight sm:text-xs">
-                  {isCurrent
-                    ? "Current step"
-                    : isLocked
+                  {isLocked
+                    ? index === 1
                       ? "Profile required"
-                      : `Step ${index + 1}`}
+                      : "Understand required"
+                    : isCurrent
+                      ? "Current step"
+                      : isCompleted
+                        ? "Completed"
+                        : `Step ${index + 1}`}
                 </span>
               </span>
             </>
@@ -86,7 +131,9 @@ export function ProgressTracker() {
                     (index + 1) +
                     ": " +
                     step.label +
-                    ", complete Profile first"
+                    (index === 1
+                      ? ", complete Profile first"
+                      : ", complete Understand first")
                   }
                   className={itemClassName}
                 >

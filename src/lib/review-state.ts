@@ -4,6 +4,7 @@ import {
   type ConfirmedProfileField,
   type ExtractedField,
 } from "@/lib/profile-schema";
+import { validateConfirmedFieldValue } from "@/lib/profile-corrections";
 import type { ProfileProgress, ReviewDocument } from "@/types/profile";
 
 export type ReviewGroup = {
@@ -228,13 +229,6 @@ export function getProfileProgress(
   const excludedFields = fields.filter(
     (field) => field.decision === "excluded",
   ).length;
-  const confirmedButConflictingGroups = groups.filter(
-    (group) =>
-      group.hasConflict &&
-      group.fields
-        .filter((field) => field.decision !== "excluded")
-        .every((field) => field.status === "confirmed"),
-  ).length;
   const pendingExtractions = documents.filter(
     (document) => document.extractionState === "processing",
   ).length;
@@ -251,8 +245,7 @@ export function getProfileProgress(
     documentsReviewed,
     recognizedDocumentsReviewed,
     fieldsConfirmed: confirmedGroups,
-    fieldsExcludedOrUnresolved:
-      excludedFields + pendingFields + confirmedButConflictingGroups,
+    fieldsExcluded: excludedFields,
     pendingFields,
     pendingExtractions,
     unresolvedConflictGroupIds,
@@ -300,12 +293,29 @@ export function projectConfirmedFields(
       return [];
     }
 
+    const validatedValue = validateConfirmedFieldValue(
+      first.fieldId,
+      first.confirmedValue,
+    );
+    if (!validatedValue.ok) {
+      return [];
+    }
+    const wasCorrected = confirmedCandidates.some(
+      (field) =>
+        normalizeFieldValue(field.fieldId, field.originalValue) !==
+        normalizeFieldValue(field.fieldId, field.confirmedValue),
+    );
+
     return [
       confirmedProfileFieldSchema.parse({
         fieldId: first.fieldId,
         reviewGroupId: first.reviewGroupId,
         label: first.label,
-        value: first.confirmedValue.trim(),
+        value: validatedValue.value.value,
+        valueCents: validatedValue.value.valueCents,
+        confirmationOrigin: wasCorrected
+          ? "renter-corrected"
+          : "extracted",
         sources: confirmedCandidates.map((field) => ({
           sourceDocumentId: field.sourceDocumentId,
           sourceDocumentName: field.sourceDocumentName,

@@ -5,6 +5,7 @@ import {
   PROFILE_SESSION_KEY,
   SESSION_DELETED_EVENT,
 } from "@/lib/session";
+import { UNDERSTAND_SESSION_KEY } from "@/lib/understand-session";
 
 const { replaceMock } = vi.hoisted(() => ({
   replaceMock: vi.fn(),
@@ -24,6 +25,7 @@ describe("Delete Session", () => {
 
   it("confirms, clears only HousingReady keys, dispatches reset, and returns home", () => {
     window.sessionStorage.setItem(PROFILE_SESSION_KEY, "profile");
+    window.sessionStorage.setItem(UNDERSTAND_SESSION_KEY, "understand");
     window.sessionStorage.setItem("housingready:preview:v1", "temporary");
     window.sessionStorage.setItem("housingready-copilot-session", "legacy");
     window.sessionStorage.setItem("another-app:keep", "preserved");
@@ -40,6 +42,7 @@ describe("Delete Session", () => {
       expect.stringContaining("Delete this temporary HousingReady session?"),
     );
     expect(window.sessionStorage.getItem(PROFILE_SESSION_KEY)).toBeNull();
+    expect(window.sessionStorage.getItem(UNDERSTAND_SESSION_KEY)).toBeNull();
     expect(window.sessionStorage.getItem("housingready:preview:v1")).toBeNull();
     expect(
       window.sessionStorage.getItem("housingready-copilot-session"),
@@ -54,6 +57,7 @@ describe("Delete Session", () => {
 
   it("does nothing when deletion is cancelled", () => {
     window.sessionStorage.setItem(PROFILE_SESSION_KEY, "profile");
+    window.sessionStorage.setItem(UNDERSTAND_SESSION_KEY, "understand");
     vi.spyOn(window, "confirm").mockReturnValue(false);
     const deletedEvent = vi.fn();
     window.addEventListener(SESSION_DELETED_EVENT, deletedEvent, {
@@ -64,6 +68,9 @@ describe("Delete Session", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete Session" }));
 
     expect(window.sessionStorage.getItem(PROFILE_SESSION_KEY)).toBe("profile");
+    expect(window.sessionStorage.getItem(UNDERSTAND_SESSION_KEY)).toBe(
+      "understand",
+    );
     expect(deletedEvent).not.toHaveBeenCalled();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(screen.queryByText("Temporary session deleted.")).toBeNull();

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { PageContainer } from "@/components/PageContainer";
+import { PrepareAccessGuard } from "@/components/PrepareAccessGuard";
 
 export const metadata: Metadata = {
   title: "Prepare",
@@ -23,11 +24,12 @@ const checklistItems = [
 
 export default function PreparePage() {
   return (
-    <PageContainer
-      eyebrow="Stage 3 of 3 · Prepare"
-      title="Prepare your application packet"
-      description="Review document readiness, resolve missing or expired items, and preview the packet you control."
-    >
+    <PrepareAccessGuard>
+      <PageContainer
+        eyebrow="Stage 3 of 3 · Prepare"
+        title="Prepare your application packet"
+        description="Review document readiness, resolve missing or expired items, and preview the packet you control."
+      >
       <div className="grid gap-5 lg:grid-cols-2">
         <section
           aria-labelledby="checklist-title"
@@ -147,6 +149,7 @@ export default function PreparePage() {
           Back to Understand
         </Link>
       </div>
-    </PageContainer>
+      </PageContainer>
+    </PrepareAccessGuard>
   );
 }

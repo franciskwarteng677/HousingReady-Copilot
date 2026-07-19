@@ -6,15 +6,24 @@ import {
   UserRound,
   WalletCards,
 } from "lucide-react";
+import { RestoredProfileEditor } from "@/components/RestoredProfileEditor";
 import type {
   ApprovedFieldId,
   ConfirmedProfileField,
+  ProfileCorrection,
   ProfileSession,
 } from "@/lib/profile-schema";
+import { isCompletedProfileSession } from "@/lib/profile-fingerprint";
 
 type ProfileSummaryProps = {
   session: ProfileSession | null;
   restored: boolean;
+  availablePreviewDocumentNames?: readonly string[];
+  onConfirmedCorrection?: (
+    nextSession: ProfileSession,
+    correction: ProfileCorrection,
+  ) => void;
+  onEditPendingChange?: (pending: boolean) => void;
 };
 
 function findField(
@@ -27,6 +36,9 @@ function findField(
 export function ProfileSummary({
   session,
   restored,
+  availablePreviewDocumentNames = [],
+  onConfirmedCorrection,
+  onEditPendingChange,
 }: ProfileSummaryProps) {
   const fields = session?.confirmedFields ?? [];
   const fullName = findField(fields, "fullName");
@@ -41,6 +53,7 @@ export function ProfileSummary({
       "payFrequency",
     ].includes(field.fieldId),
   );
+  const profileComplete = isCompletedProfileSession(session);
 
   return (
     <section
@@ -63,17 +76,17 @@ export function ProfileSummary({
         <span
           className={
             "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold " +
-            (session?.profileComplete
+            (profileComplete
               ? "bg-brand-soft text-brand-dark"
               : "bg-slate-100 text-slate-700")
           }
         >
-          {session?.profileComplete ? (
+          {profileComplete ? (
             <CircleCheck aria-hidden="true" size={15} />
           ) : (
             <CircleAlert aria-hidden="true" size={15} />
           )}
-          {session?.profileComplete
+          {profileComplete
             ? "Profile confirmation complete"
             : "Profile confirmation in progress"}
         </span>
@@ -82,8 +95,8 @@ export function ProfileSummary({
       {restored && session ? (
         <p className="mt-5 rounded-xl border border-brand/30 bg-brand-soft px-4 py-3 text-sm leading-6 text-brand-dark">
           Confirmed session values were restored. Raw documents and previews
-          were not stored; re-upload the samples to inspect their evidence
-          again.
+          were not stored. You can edit confirmed values without re-uploading;
+          re-upload a sample only when you want to inspect its evidence again.
         </p>
       ) : null}
 
@@ -128,7 +141,7 @@ export function ProfileSummary({
         </article>
       </div>
 
-      <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+      <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-line p-4">
           <dt className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <FileCheck2 aria-hidden="true" size={17} className="text-brand" />
@@ -154,10 +167,23 @@ export function ProfileSummary({
               size={17}
               className="text-amber-700"
             />
-            Fields excluded or unresolved
+            Fields excluded
           </dt>
           <dd className="mt-2 text-2xl font-bold text-ink">
-            {session?.counts.fieldsExcludedOrUnresolved ?? 0}
+            {session?.counts.fieldsExcluded ?? 0}
+          </dd>
+        </div>
+        <div className="rounded-xl border border-line p-4">
+          <dt className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+            <CircleAlert
+              aria-hidden="true"
+              size={17}
+              className="text-amber-700"
+            />
+            Unresolved conflicts
+          </dt>
+          <dd className="mt-2 text-2xl font-bold text-ink">
+            {session?.counts.unresolvedConflicts ?? 0}
           </dd>
         </div>
       </dl>
@@ -176,6 +202,15 @@ export function ProfileSummary({
             ))}
           </ul>
         </div>
+      ) : null}
+
+      {restored && session && onConfirmedCorrection && onEditPendingChange ? (
+        <RestoredProfileEditor
+          session={session}
+          availablePreviewDocumentNames={availablePreviewDocumentNames}
+          onConfirmedCorrection={onConfirmedCorrection}
+          onPendingChange={onEditPendingChange}
+        />
       ) : null}
     </section>
   );

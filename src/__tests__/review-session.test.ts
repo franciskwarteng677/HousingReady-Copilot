@@ -14,6 +14,7 @@ import {
   makeField,
   makeReviewDocument,
 } from "@/__tests__/fixtures";
+import { profileSessionSchema } from "@/lib/profile-schema";
 
 describe("human field review", () => {
   it("marks a changed value Corrected and requires explicit confirmation", () => {
@@ -65,7 +66,7 @@ describe("human field review", () => {
     );
   });
 
-  it("counts a conflict as unresolved even when every candidate was confirmed", () => {
+  it("tracks excluded candidates separately from unresolved conflicts", () => {
     const first = makeField({
       candidateId: "confirmed-conflict-1",
       status: "confirmed",
@@ -89,7 +90,7 @@ describe("human field review", () => {
     expect(progress.unresolvedConflictGroupIds).toEqual([
       "person.fullName",
     ]);
-    expect(progress.fieldsExcludedOrUnresolved).toBe(1);
+    expect(progress.fieldsExcluded).toBe(0);
     expect(progress.profileComplete).toBe(false);
   });
 });
@@ -176,6 +177,52 @@ describe("duplicate and conflict handling", () => {
 });
 
 describe("profile progression and storage projection", () => {
+  it("rejects a completed stored Profile with unresolved conflicts", () => {
+    expect(() =>
+      profileSessionSchema.parse({
+        version: 3,
+        revision: 1,
+        correctionHistory: [],
+        documents: [],
+        confirmedFields: [],
+        profileComplete: true,
+        counts: {
+          documentsReviewed: 0,
+          fieldsConfirmed: 0,
+          fieldsExcluded: 1,
+          unresolvedConflicts: 1,
+        },
+        updatedAt: "2026-07-18T12:00:00.000Z",
+      }),
+    ).toThrow("A completed Profile cannot contain unresolved conflicts.");
+  });
+
+  it("allows completion with an excluded candidate and zero unresolved conflicts", () => {
+    const retained = makeField({ candidateId: "retained-name" });
+    const excluded = makeField({
+      candidateId: "excluded-name",
+      sourceDocumentId: "document-2",
+      sourceDocumentName: "synthetic-benefits-letter.pdf",
+      originalValue: "Maria J. Johnson",
+      confirmedValue: "Maria J. Johnson",
+    });
+    const resolved = retainCandidate(
+      [retained, excluded],
+      retained.candidateId,
+    );
+    const session = createProfileSession(
+      [makeReviewDocument()],
+      resolved,
+      "2026-07-18T12:00:00.000Z",
+    );
+
+    expect(session.profileComplete).toBe(true);
+    expect(session.counts).toMatchObject({
+      fieldsExcluded: 1,
+      unresolvedConflicts: 0,
+    });
+  });
+
   it("keeps progression disabled until a recognized document has confirmed, settled fields", () => {
     const document = makeReviewDocument();
     const pending = makeField();

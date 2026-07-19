@@ -2,6 +2,7 @@
 
 import {
   CheckCircle2,
+  CircleAlert,
   CircleDashed,
   CircleOff,
   Pencil,
@@ -9,11 +10,16 @@ import {
   Save,
   Sparkles,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SourceEvidence } from "@/components/SourceEvidence";
-import { groupReviewFields } from "@/lib/review-state";
-import type { ExtractedField } from "@/lib/profile-schema";
+import {
+  isCurrencyField,
+  validateConfirmedFieldValue,
+} from "@/lib/profile-corrections";
+import { supportedPayFrequencySchema, type ExtractedField } from "@/lib/profile-schema";
+import { groupReviewFields, normalizeFieldValue } from "@/lib/review-state";
 
 type FieldReviewListProps = {
   fields: readonly ExtractedField[];
@@ -36,10 +42,18 @@ function FieldStatus({ field }: { field: ExtractedField }) {
   }
 
   if (field.status === "confirmed") {
+    const corrected =
+      normalizeFieldValue(field.fieldId, field.originalValue) !==
+      normalizeFieldValue(field.fieldId, field.confirmedValue);
+
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-bold text-brand-dark">
-        <CheckCircle2 aria-hidden="true" size={15} />
-        Confirmed
+        {corrected ? (
+          <Pencil aria-hidden="true" size={15} />
+        ) : (
+          <CheckCircle2 aria-hidden="true" size={15} />
+        )}
+        {corrected ? "Corrected and confirmed by renter" : "Confirmed"}
       </span>
     );
   }
@@ -85,16 +99,58 @@ function FieldCandidateCard({
   onRetain,
 }: FieldCandidateCardProps) {
   const [editing, setEditing] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [draftValue, setDraftValue] = useState(field.confirmedValue);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
   const isExcluded = field.decision === "excluded";
   const inputId = "confirmed-value-" + field.candidateId.replace(/[^a-z0-9]/gi, "-");
+  const helpId = `${inputId}-help`;
+  const errorId = `${inputId}-error`;
 
   useEffect(() => {
     if (editing) {
       inputRef.current?.focus();
-      inputRef.current?.select();
     }
   }, [editing]);
+
+  function beginEdit() {
+    setDraftValue(field.confirmedValue);
+    setError("");
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setDraftValue(field.confirmedValue);
+    setError("");
+    setEditing(false);
+  }
+
+  function saveCorrection() {
+    const validation = validateConfirmedFieldValue(field.fieldId, draftValue);
+    if (!validation.ok) {
+      setError(validation.error);
+      return;
+    }
+
+    const current = validateConfirmedFieldValue(
+      field.fieldId,
+      field.confirmedValue,
+    );
+    if (
+      current.ok &&
+      current.value.valueCents === validation.value.valueCents &&
+      current.value.value.toLocaleLowerCase("en-US") ===
+        validation.value.value.toLocaleLowerCase("en-US")
+    ) {
+      setError("Change the value before saving a correction.");
+      return;
+    }
+
+    onCorrect(field.candidateId, validation.value.value);
+    setDraftValue(validation.value.value);
+    setError("");
+    setEditing(false);
+  }
 
   return (
     <article
@@ -143,18 +199,56 @@ function FieldCandidateCard({
         <label htmlFor={inputId} className="text-sm font-bold text-ink">
           Value to confirm
         </label>
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="text"
-          value={field.confirmedValue}
-          readOnly={!editing}
-          disabled={isExcluded}
-          onChange={(event) =>
-            onCorrect(field.candidateId, event.target.value)
-          }
-          className="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none read-only:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-500 focus-visible:border-brand focus-visible:ring-4 focus-visible:ring-teal-200"
-        />
+        {editing && field.fieldId === "payFrequency" ? (
+          <select
+            ref={(element) => {
+              inputRef.current = element;
+            }}
+            id={inputId}
+            value={draftValue}
+            aria-describedby={`${helpId}${error ? ` ${errorId}` : ""}`}
+            aria-invalid={error ? "true" : undefined}
+            onChange={(event) => setDraftValue(event.target.value)}
+            className="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus-visible:border-brand focus-visible:ring-4 focus-visible:ring-teal-200"
+          >
+            {supportedPayFrequencySchema.options.map((frequency) => (
+              <option key={frequency} value={frequency}>
+                {frequency}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            ref={(element) => {
+              inputRef.current = element;
+            }}
+            id={inputId}
+            type="text"
+            inputMode={isCurrencyField(field.fieldId) ? "decimal" : undefined}
+            value={editing ? draftValue : field.confirmedValue}
+            readOnly={!editing}
+            disabled={isExcluded}
+            aria-describedby={editing ? `${helpId}${error ? ` ${errorId}` : ""}` : undefined}
+            aria-invalid={error ? "true" : undefined}
+            onChange={(event) => setDraftValue(event.target.value)}
+            className="mt-2 block min-h-11 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none read-only:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-500 focus-visible:border-brand focus-visible:ring-4 focus-visible:ring-teal-200"
+          />
+        )}
+        {editing ? (
+          <p id={helpId} className="mt-2 text-xs leading-5 text-slate-500">
+            Save validates this draft. You must still select Confirm afterward.
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            id={errorId}
+            className="mt-2 flex items-start gap-2 text-sm font-bold text-rose-700"
+            role="alert"
+          >
+            <CircleAlert aria-hidden="true" size={16} className="mt-0.5 shrink-0" />
+            {error}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4">
@@ -173,43 +267,58 @@ function FieldCandidateCard({
           </button>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => setEditing((current) => !current)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-teal-200"
-              aria-label={
-                (editing ? "Save edit for " : "Edit ") +
-                field.label +
-                " from " +
-                field.sourceDocumentName
-              }
-            >
-              {editing ? (
-                <Save aria-hidden="true" size={16} />
-              ) : (
-                <Pencil aria-hidden="true" size={16} />
-              )}
-              {editing ? "Save edit" : "Edit"}
-            </button>
-            <button
-              type="button"
-              onClick={() => onConfirm(field.candidateId)}
-              disabled={
-                field.confirmedValue.trim().length === 0 ||
-                field.status === "confirmed"
-              }
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white outline-none hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300"
-              aria-label={
-                "Confirm " +
-                field.label +
-                " from " +
-                field.sourceDocumentName
-              }
-            >
-              <CheckCircle2 aria-hidden="true" size={16} />
-              {field.status === "confirmed" ? "Confirmed" : "Confirm"}
-            </button>
-            {groupHasConflict ? (
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={saveCorrection}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white outline-none hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200"
+                  aria-label={`Save correction for ${field.label} from ${field.sourceDocumentName}`}
+                >
+                  <Save aria-hidden="true" size={16} />
+                  Save correction
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-slate-200"
+                >
+                  <X aria-hidden="true" size={16} />
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={beginEdit}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-teal-200"
+                  aria-label={`Edit ${field.label} from ${field.sourceDocumentName}`}
+                >
+                  <Pencil aria-hidden="true" size={16} />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onConfirm(field.candidateId)}
+                  disabled={
+                    field.confirmedValue.trim().length === 0 ||
+                    field.status === "confirmed"
+                  }
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white outline-none hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  aria-label={
+                    "Confirm " +
+                    field.label +
+                    " from " +
+                    field.sourceDocumentName
+                  }
+                >
+                  <CheckCircle2 aria-hidden="true" size={16} />
+                  {field.status === "confirmed" ? "Confirmed" : "Confirm"}
+                </button>
+              </>
+            )}
+            {!editing && groupHasConflict ? (
               <button
                 type="button"
                 onClick={() => onRetain(field.candidateId)}
@@ -227,20 +336,22 @@ function FieldCandidateCard({
                 Retain this value
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => onExclude(field.candidateId)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-slate-200"
-              aria-label={
-                "Exclude " +
-                field.label +
-                " from " +
-                field.sourceDocumentName
-              }
-            >
-              <CircleOff aria-hidden="true" size={16} />
-              Exclude
-            </button>
+            {!editing ? (
+              <button
+                type="button"
+                onClick={() => onExclude(field.candidateId)}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-slate-200"
+                aria-label={
+                  "Exclude " +
+                  field.label +
+                  " from " +
+                  field.sourceDocumentName
+                }
+              >
+                <CircleOff aria-hidden="true" size={16} />
+                Exclude
+              </button>
+            ) : null}
           </>
         )}
       </div>

@@ -48,8 +48,12 @@ export default function PrivacyPage() {
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Prototype work is scoped to a temporary browser session. Files are
-            processed client-side; only confirmed structured fields and
-            document metadata are saved temporarily.
+            processed client-side. Temporary storage is limited to confirmed
+            structured Profile fields, integer-cent money values, document
+            metadata, minimal revision information, confirmed household size,
+            deterministic calculation inputs and results, frozen corpus
+            identifiers, and rule-review state. Raw documents, preview data,
+            and full source text are never restored from storage.
           </p>
         </section>
 

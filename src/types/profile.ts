@@ -36,7 +36,7 @@ export type ProfileProgress = {
   documentsReviewed: number;
   recognizedDocumentsReviewed: number;
   fieldsConfirmed: number;
-  fieldsExcludedOrUnresolved: number;
+  fieldsExcluded: number;
   pendingFields: number;
   pendingExtractions: number;
   unresolvedConflictGroupIds: string[];

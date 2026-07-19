@@ -17,6 +17,7 @@ import { DocumentPreview } from "@/components/DocumentPreview";
 import { DocumentUploader } from "@/components/DocumentUploader";
 import { FieldReviewList } from "@/components/FieldReviewList";
 import { ProfileSummary } from "@/components/ProfileSummary";
+import { ReuploadReconciliationPanel } from "@/components/ReuploadReconciliationPanel";
 import { SampleDocumentDownloads } from "@/components/SampleDocumentDownloads";
 import { syntheticDemoExtractor } from "@/lib/extraction-service";
 import {
@@ -24,8 +25,14 @@ import {
   type ValidatedFile,
 } from "@/lib/file-validation";
 import { ObjectUrlRegistry } from "@/lib/object-url-registry";
+import { isCompletedProfileSession } from "@/lib/profile-fingerprint";
+import {
+  carryForwardProfileRevision,
+  formatCorrectionAudit,
+} from "@/lib/profile-corrections";
 import {
   type ExtractedField,
+  type ProfileCorrection,
   type ProfileSession,
 } from "@/lib/profile-schema";
 import {
@@ -40,7 +47,6 @@ import {
 import {
   createProfileSession,
   loadProfileSession,
-  PROFILE_SESSION_KEY,
   PROFILE_UPDATED_EVENT,
   saveProfileSession,
   SESSION_ACTIVE_EVENT,
@@ -65,7 +71,7 @@ function createDocumentId(): string {
 }
 
 export function ProfileWorkflow() {
-  const router = useRouter();
+  const { push } = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef(new Map<string, File>());
   const urlsRef = useRef(new ObjectUrlRegistry());
@@ -83,6 +89,8 @@ export function ProfileWorkflow() {
   const [restoredSession, setRestoredSession] =
     useState<ProfileSession | null>(null);
   const [workflowStarted, setWorkflowStarted] = useState(false);
+  const [restoredEditPending, setRestoredEditPending] = useState(false);
+  const [reuploadApplied, setReuploadApplied] = useState(false);
 
   const progress = useMemo(
     () => getProfileProgress(documents, fields),
@@ -97,10 +105,12 @@ export function ProfileWorkflow() {
     [documents, fields, workflowStarted],
   );
 
-  const summarySession = workflowStarted
-    ? currentSession
-    : restoredSession;
-  const canContinue = summarySession?.profileComplete ?? false;
+  const isReuploadReview = Boolean(restoredSession && workflowStarted);
+  const summarySession = restoredSession ?? currentSession;
+  const canContinue =
+    isCompletedProfileSession(summarySession) &&
+    !restoredEditPending &&
+    (!isReuploadReview || reuploadApplied);
   const selectedDocument =
     documents.find((document) => document.id === selectedDocumentId) ?? null;
 
@@ -113,21 +123,19 @@ export function ProfileWorkflow() {
   }, []);
 
   useEffect(() => {
-    if (!workflowStarted) {
+    if (!workflowStarted || restoredSession) {
       return;
     }
 
-    if (documents.length === 0) {
-      window.sessionStorage.removeItem(PROFILE_SESSION_KEY);
-      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
-      return;
-    }
-
-    if (currentSession) {
-      saveProfileSession(window.sessionStorage, currentSession);
+    if (currentSession?.profileComplete) {
+      const revisionedSession = carryForwardProfileRevision(
+        loadProfileSession(window.sessionStorage),
+        currentSession,
+      );
+      saveProfileSession(window.sessionStorage, revisionedSession);
       window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
     }
-  }, [currentSession, documents.length, workflowStarted]);
+  }, [currentSession, restoredSession, workflowStarted]);
 
   useEffect(() => {
     const registry = urlsRef.current;
@@ -144,6 +152,8 @@ export function ProfileWorkflow() {
       setFileErrors([]);
       setRestoredSession(null);
       setWorkflowStarted(false);
+      setRestoredEditPending(false);
+      setReuploadApplied(false);
       if (inputRef.current) {
         inputRef.current.value = "";
       }
@@ -256,7 +266,7 @@ export function ProfileWorkflow() {
     }
 
     setWorkflowStarted(true);
-    setRestoredSession(null);
+    setReuploadApplied(false);
     setDocuments((current) => [
       ...current,
       ...newDocuments.map(({ document }) => document),
@@ -396,22 +406,81 @@ export function ProfileWorkflow() {
     );
   }
 
+  function handleConfirmedCorrection(
+    nextSession: ProfileSession,
+    correction: ProfileCorrection,
+  ) {
+    saveProfileSession(window.sessionStorage, nextSession);
+    setRestoredSession(nextSession);
+    setRestoredEditPending(false);
+    setReuploadApplied(false);
+    window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
+    window.dispatchEvent(new Event(SESSION_ACTIVE_EVENT));
+    setAnnouncement(
+      `${formatCorrectionAudit(correction)} Corrected and confirmed by renter.`,
+    );
+  }
+
+  function discardReuploadChanges() {
+    urlsRef.current.revokeAll();
+    filesRef.current.clear();
+    setDocuments([]);
+    setFields([]);
+    setSelectedDocumentId(null);
+    setPreviewFile(null);
+    setPreviewImageUrl(undefined);
+    setFileErrors([]);
+    setWorkflowStarted(false);
+    setReuploadApplied(false);
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+    window.dispatchEvent(new Event(SESSION_ACTIVE_EVENT));
+    setAnnouncement(
+      "Re-upload changes were discarded. The saved confirmed Profile and Understand calculation were not changed.",
+    );
+  }
+
+  function applyReuploadReview(
+    nextSession: ProfileSession,
+    corrections: readonly ProfileCorrection[],
+    retainedCount: number,
+  ) {
+    if (corrections.length > 0) {
+      saveProfileSession(window.sessionStorage, nextSession);
+      setRestoredSession(nextSession);
+      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
+    }
+    setReuploadApplied(true);
+    window.dispatchEvent(new Event(SESSION_ACTIVE_EVENT));
+    setAnnouncement(
+      `Re-upload review applied. ${retainedCount} saved ${retainedCount === 1 ? "value was" : "values were"} retained and ${corrections.length} ${corrections.length === 1 ? "value was" : "values were"} restored from the synthetic document.`,
+    );
+  }
+
   let continueMessage =
     "Review at least one provided synthetic sample and confirm every usable field.";
 
-  if (progress.pendingExtractions > 0) {
+  if (restoredEditPending) {
+    continueMessage =
+      "Confirm or cancel the pending structured-value correction before continuing.";
+  } else if (isReuploadReview && !reuploadApplied) {
+    continueMessage = progress.pendingExtractions
+      ? "Wait for temporary demo extraction to finish. The saved Profile remains protected."
+      : "Review and apply the re-upload reconciliation choices before continuing.";
+  } else if (!isReuploadReview && progress.pendingExtractions > 0) {
     continueMessage =
       "Wait for temporary demo extraction to finish before continuing.";
-  } else if (progress.unresolvedConflictGroupIds.length > 0) {
+  } else if (!isReuploadReview && progress.unresolvedConflictGroupIds.length > 0) {
     continueMessage =
       "Resolve every conflicting field by retaining one candidate value.";
-  } else if (progress.pendingFields > 0) {
+  } else if (!isReuploadReview && progress.pendingFields > 0) {
     continueMessage =
       "Confirm or intentionally exclude every usable field before continuing.";
   } else if (canContinue) {
     continueMessage =
       "Profile requirements are complete. You can continue to Understand.";
-  } else if (restoredSession?.profileComplete && !workflowStarted) {
+  } else if (isCompletedProfileSession(restoredSession) && !workflowStarted) {
     continueMessage =
       "The restored confirmed profile is complete. You can continue to Understand.";
   }
@@ -486,19 +555,35 @@ export function ProfileWorkflow() {
         imageUrl={previewImageUrl}
       />
 
-      <FieldReviewList
-        fields={fields}
-        onCorrect={handleCorrect}
-        onConfirm={handleConfirm}
-        onExclude={handleExclude}
-        onRestore={handleRestore}
-        onRetain={handleRetain}
-        onConfirmAll={handleConfirmAll}
-      />
+      {isReuploadReview && restoredSession ? (
+        <ReuploadReconciliationPanel
+          key={`${restoredSession.revision}:${fields.map((field) => field.candidateId).join("|")}`}
+          session={restoredSession}
+          fields={fields}
+          processing={progress.pendingExtractions > 0}
+          onApply={applyReuploadReview}
+          onDiscard={discardReuploadChanges}
+        />
+      ) : (
+        <FieldReviewList
+          fields={fields}
+          onCorrect={handleCorrect}
+          onConfirm={handleConfirm}
+          onExclude={handleExclude}
+          onRestore={handleRestore}
+          onRetain={handleRetain}
+          onConfirmAll={handleConfirmAll}
+        />
+      )}
 
       <ProfileSummary
         session={summarySession}
-        restored={!workflowStarted && Boolean(restoredSession)}
+        restored={Boolean(restoredSession)}
+        availablePreviewDocumentNames={documents.map(
+          (document) => document.name,
+        )}
+        onConfirmedCorrection={handleConfirmedCorrection}
+        onEditPendingChange={setRestoredEditPending}
       />
 
       <div className="rounded-2xl border border-line bg-white p-5 shadow-card sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6">
@@ -515,7 +600,7 @@ export function ProfileWorkflow() {
           type="button"
           disabled={!canContinue}
           aria-describedby="continue-understand-help"
-          onClick={() => router.push("/understand")}
+          onClick={() => push("/understand")}
           className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-bold text-white outline-none transition-colors hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 sm:mt-0 sm:w-auto"
         >
           Continue to Understand
