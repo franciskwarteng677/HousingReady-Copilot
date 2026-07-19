@@ -21,9 +21,15 @@ import {
 } from "@/lib/profile-schema";
 import {
   createPrepareSession,
-  setMissingOrExpiredReview,
+  setDocumentReadinessAcknowledgement,
   setPrepareDocumentReview,
 } from "@/lib/prepare-session";
+import {
+  PROTOTYPE_READINESS_LABEL,
+  READINESS_CHECKLIST_SOURCE_CLASSIFICATION,
+  READINESS_CHECKLIST_VERSION,
+  READINESS_RESULTS_DISCLAIMER,
+} from "@/lib/readiness/checklist";
 import {
   acknowledgeUnderstandReview,
   confirmHouseholdSize,
@@ -204,7 +210,7 @@ function makeCompletedPrepare(
     "2026-07-19T12:13:00.000Z",
   );
 
-  return setMissingOrExpiredReview(
+  return setDocumentReadinessAcknowledgement(
     prepare,
     true,
     "2026-07-19T12:14:00.000Z",
@@ -285,9 +291,58 @@ describe("safe deterministic readiness packet content", () => {
       const packet = buildReadyPacket(profile());
 
       expect(packet.hudReferenceComparison.relationship).toBe(relationship);
-      expect(packet.documentReadinessChecklist.items).toHaveLength(4);
+      expect(packet.documentReadinessChecklist.items).toHaveLength(3);
+      expect(packet.documentReadinessResults.acknowledgementStatus).toBe(
+        "Acknowledged by renter",
+      );
     },
   );
+
+  it("records the exact versioned prototype results and renter acknowledgement", () => {
+    const packet = buildReadyPacket(
+      correctGrossPayTo1700(makeFullProfile()),
+    );
+
+    expect(packet.documentReadinessResults).toMatchObject({
+      heading: "Document-readiness results",
+      checklistVersion: READINESS_CHECKLIST_VERSION,
+      sourceClassification: READINESS_CHECKLIST_SOURCE_CLASSIFICATION,
+      prototypeLabel: PROTOTYPE_READINESS_LABEL,
+      reviewedAt: "2026-07-19T12:14:00.000Z",
+      acknowledgementStatus: "Acknowledged by renter",
+      disclaimer: READINESS_RESULTS_DISCLAIMER,
+      results: [
+        {
+          requirementId: "identity-document",
+          status: "missing",
+          statusLabel: "Missing",
+          supportingDocuments: [],
+        },
+        {
+          requirementId: "income-documentation",
+          status: "present",
+          statusLabel: "Present",
+        },
+        {
+          requirementId: "residency-documentation",
+          status: "present",
+          statusLabel: "Present",
+        },
+      ],
+    });
+    expect(
+      packet.documentReadinessResults.results.find(
+        (result) => result.requirementId === "residency-documentation",
+      )?.supportingDocuments,
+    ).toEqual([
+      expect.objectContaining({
+        documentName: "synthetic-residency-document.pdf",
+        normalizedDocumentType: "utility bill",
+        sourcePages: [1],
+        matchBasis: "confirmed-document-type",
+      }),
+    ]);
+  });
 
   it("contains mandatory safety statements without producing a housing outcome", () => {
     const packet = buildReadyPacket(
@@ -388,7 +443,7 @@ describe("safe deterministic readiness packet content", () => {
     });
   });
 
-  it("exposes eight exact, deterministic PDF sections and renders a multi-page Blob", async () => {
+  it("separates confirmed metadata, prototype results, arithmetic, official HUD data, and product policy in the PDF", async () => {
     const packet = buildReadyPacket(
       correctGrossPayTo1700(makeFullProfile()),
     );
@@ -398,14 +453,26 @@ describe("safe deterministic readiness packet content", () => {
       "Cover",
       "Confirmed renter information",
       "Confirmed income-related information",
-      "Transparent annualised calculation",
-      "Verified HUD reference comparison",
-      "Document-readiness checklist",
       "Confirmed source-document metadata",
-      "Source and decision boundaries",
+      "Document-readiness results",
+      "Renter review acknowledgements",
+      "Verified official HUD reference data",
+      "Deterministic HousingReady arithmetic",
+      "HousingReady product policy and decision boundary",
     ]);
-    expect(JSON.stringify(sections)).toContain("$1,700.00");
-    expect(JSON.stringify(sections)).toContain(PACKET_COVER_DISCLAIMER);
+    const searchableSections = JSON.stringify(sections);
+    expect(searchableSections).toContain("$1,700.00");
+    expect(searchableSections).toContain(PACKET_COVER_DISCLAIMER);
+    expect(searchableSections).toContain(
+      `Checklist version: ${READINESS_CHECKLIST_VERSION}`,
+    );
+    expect(searchableSections).toContain("Identity: Missing");
+    expect(searchableSections).toContain("Income: Present");
+    expect(searchableSections).toContain("Residency: Present");
+    expect(searchableSections).toContain(
+      "Acknowledgement status: Acknowledged by renter",
+    );
+    expect(searchableSections).toContain(READINESS_RESULTS_DISCLAIMER);
 
     const rendered = await generateReadinessPacketPdf(packet);
 

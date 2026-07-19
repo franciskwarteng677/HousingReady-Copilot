@@ -30,7 +30,7 @@ export function IncomeCalculationPanel({
   return (
     <section
       aria-labelledby="income-calculation-heading"
-      className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-7"
+      className="rounded-2xl border border-brand/15 bg-white/95 p-5 shadow-card ring-1 ring-white/70 sm:p-7"
     >
       <p className="inline-flex items-center gap-2 text-sm font-bold text-brand">
         <Calculator aria-hidden="true" size={18} />
@@ -74,7 +74,7 @@ export function IncomeCalculationPanel({
               ).map(([label, evidence]) => (
                 <article
                   key={label}
-                  className="rounded-xl border border-line bg-canvas p-4"
+                  className="rounded-xl border border-line bg-canvas/80 p-4 shadow-sm"
                 >
                   <h4 className="text-sm font-bold text-slate-600">{label}</h4>
                   <p className="mt-1 font-bold text-ink">
@@ -156,7 +156,7 @@ export function IncomeCalculationPanel({
               </dl>
             </article>
 
-            <article className="rounded-xl border border-brand bg-brand-soft p-4 sm:p-5">
+            <article className="relative overflow-hidden rounded-xl border border-brand/40 bg-[linear-gradient(135deg,#e8f5f1,#f0f9ff)] p-4 shadow-[0_18px_40px_-30px_rgba(11,118,110,0.55)] sm:p-5">
               <h3 className="flex items-center gap-2 font-bold text-ink">
                 <Equal aria-hidden="true" size={18} className="text-brand" />
                 Combined annualised amount

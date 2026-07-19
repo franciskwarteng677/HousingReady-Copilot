@@ -506,7 +506,7 @@ export function ProfileWorkflow() {
 
         <aside
           aria-labelledby="demo-boundaries-title"
-          className="h-fit rounded-2xl border border-line bg-brand-soft p-6"
+          className="h-fit rounded-2xl border border-brand/20 bg-[linear-gradient(145deg,#e8f5f1,#eff8ff)] p-6 shadow-[0_22px_50px_-40px_rgba(11,118,110,0.55)] ring-1 ring-white/70"
         >
           <ShieldCheck aria-hidden="true" size={24} className="text-brand" />
           <h2
@@ -586,7 +586,7 @@ export function ProfileWorkflow() {
         onEditPendingChange={setRestoredEditPending}
       />
 
-      <div className="rounded-2xl border border-line bg-white p-5 shadow-card sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6">
+      <div className="rounded-2xl border border-brand/15 bg-white/95 p-5 shadow-card ring-1 ring-white/70 sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6">
         <div>
           <h2 className="font-bold text-ink">Continue when your review is complete</h2>
           <p
@@ -601,10 +601,14 @@ export function ProfileWorkflow() {
           disabled={!canContinue}
           aria-describedby="continue-understand-help"
           onClick={() => push("/understand")}
-          className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-bold text-white outline-none transition-colors hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 sm:mt-0 sm:w-auto"
+          className="group mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-extrabold text-white shadow-lg shadow-teal-900/15 outline-none transition-[transform,background-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:bg-brand-dark hover:shadow-xl motion-safe:active:translate-y-0 focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none sm:mt-0 sm:w-auto"
         >
           Continue to Understand
-          <ArrowRight aria-hidden="true" size={19} />
+          <ArrowRight
+            aria-hidden="true"
+            size={19}
+            className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5"
+          />
         </button>
       </div>
     </div>

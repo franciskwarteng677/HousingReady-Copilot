@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DeleteSessionButton } from "@/components/DeleteSessionButton";
-import { PREPARE_SESSION_KEY } from "@/lib/prepare-session";
+import {
+  LEGACY_PREPARE_SESSION_KEY,
+  PREPARE_SESSION_KEY,
+} from "@/lib/prepare-session";
 import {
   PROFILE_SESSION_KEY,
   SESSION_DELETED_EVENT,
@@ -28,6 +31,10 @@ describe("Delete Session", () => {
     window.sessionStorage.setItem(PROFILE_SESSION_KEY, "profile");
     window.sessionStorage.setItem(UNDERSTAND_SESSION_KEY, "understand");
     window.sessionStorage.setItem(PREPARE_SESSION_KEY, "prepare");
+    window.sessionStorage.setItem(
+      LEGACY_PREPARE_SESSION_KEY,
+      "legacy-prepare",
+    );
     window.sessionStorage.setItem("housingready:preview:v1", "temporary");
     window.sessionStorage.setItem("housingready-copilot-session", "legacy");
     window.sessionStorage.setItem("another-app:keep", "preserved");
@@ -52,6 +59,9 @@ describe("Delete Session", () => {
     expect(window.sessionStorage.getItem(PROFILE_SESSION_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(UNDERSTAND_SESSION_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(PREPARE_SESSION_KEY)).toBeNull();
+    expect(
+      window.sessionStorage.getItem(LEGACY_PREPARE_SESSION_KEY),
+    ).toBeNull();
     expect(window.sessionStorage.getItem("housingready:preview:v1")).toBeNull();
     expect(
       window.sessionStorage.getItem("housingready-copilot-session"),

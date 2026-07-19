@@ -15,7 +15,7 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
   return (
     <section
       aria-labelledby="program-scope-heading"
-      className="overflow-hidden rounded-2xl border border-ink bg-ink text-white shadow-card"
+      className="relative overflow-hidden rounded-2xl border border-slate-700 bg-[linear-gradient(135deg,#102b40,#153b4e_58%,#0b5d5b)] text-white shadow-[0_28px_70px_-42px_rgba(15,47,66,0.9)] ring-1 ring-white/10"
     >
       <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[1.1fr_1.9fr]">
         <div>
@@ -37,7 +37,7 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
         </div>
 
         <dl className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl bg-white/10 p-4">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
             <dt className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
               Location
             </dt>
@@ -45,13 +45,13 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
               {FROZEN_GEOGRAPHY.city}, {FROZEN_GEOGRAPHY.state}
             </dd>
           </div>
-          <div className="rounded-xl bg-white/10 p-4">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
             <dt className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
               Rule year
             </dt>
             <dd className="mt-2 font-bold">{FROZEN_RULE_YEAR}</dd>
           </div>
-          <div className="rounded-xl bg-white/10 p-4 sm:col-span-2">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm sm:col-span-2">
             <dt className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
               HUD area
             </dt>
@@ -59,7 +59,7 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
               {FROZEN_GEOGRAPHY.hudArea}
             </dd>
           </div>
-          <div className="rounded-xl bg-white/10 p-4 sm:col-span-2">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm sm:col-span-2">
             <dt className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
               Program context
             </dt>
@@ -67,7 +67,7 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
               {FROZEN_PROGRAM_NAME}
             </dd>
           </div>
-          <div className="rounded-xl bg-white/10 p-4 sm:col-span-2">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm sm:col-span-2">
             <dt className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
               <Database aria-hidden="true" size={15} />
               Source type
@@ -86,7 +86,7 @@ export function ProgramScopePanel({ corpus }: ProgramScopePanelProps) {
               the demo does not depend on a live network request.
             </p>
           </div>
-          <div className="rounded-xl bg-white/10 p-4 sm:col-span-2">
+          <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm sm:col-span-2">
             <dt className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">
               Primary reference comparison
             </dt>

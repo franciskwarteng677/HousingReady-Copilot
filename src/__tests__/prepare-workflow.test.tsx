@@ -9,7 +9,7 @@ import {
   loadCurrentPrepareSession,
   PREPARE_SESSION_KEY,
   savePrepareSession,
-  setMissingOrExpiredReview,
+  setDocumentReadinessAcknowledgement,
   setPrepareDocumentReview,
 } from "@/lib/prepare-session";
 import { saveProfileSession } from "@/lib/session";
@@ -20,7 +20,10 @@ import {
   saveUnderstandSession,
 } from "@/lib/understand-session";
 import { buildIncomeCalculation } from "@/lib/understand-state";
-import type { ProfileSession } from "@/lib/profile-schema";
+import {
+  profileSessionSchema,
+  type ProfileSession,
+} from "@/lib/profile-schema";
 
 const { generateReadinessPacketPdfMock, replaceMock } = vi.hoisted(() => ({
   generateReadinessPacketPdfMock: vi.fn(),
@@ -45,8 +48,32 @@ const reviewControlNames = [
   "Review Identity document",
   "Review Income documentation",
   "Review Residency documentation",
-  "I reviewed missing or expired items",
+  "I reviewed the document-readiness results",
 ] as const;
+
+function withSyntheticResidencyDocument(
+  profile: ProfileSession,
+): ProfileSession {
+  return profileSessionSchema.parse({
+    ...profile,
+    documents: [
+      ...profile.documents,
+      {
+        id: "residency-document",
+        name: "synthetic-residency-document.pdf",
+        mimeType: "application/pdf",
+        size: 1_280,
+        lastModified: 1_782_000_000_000,
+        sampleKind: "residency-document",
+        reviewState: "reviewed",
+      },
+    ],
+    counts: {
+      ...profile.counts,
+      documentsReviewed: profile.counts.documentsReviewed + 1,
+    },
+  });
+}
 
 function persistPendingUnderstand(profile: ProfileSession) {
   const result = buildIncomeCalculation(profile, CALCULATED_AT);
@@ -68,7 +95,9 @@ function persistPendingUnderstand(profile: ProfileSession) {
 }
 
 function persistCompletedWorkflow() {
-  const profile = makeCompleteIncomeProfile({ grossPay: "$1,700.00" });
+  const profile = withSyntheticResidencyDocument(
+    makeCompleteIncomeProfile({ grossPay: "$1,700.00" }),
+  );
   const { calculation, pending } = persistPendingUnderstand(profile);
   const completed = acknowledgeUnderstandReview(
     profile,
@@ -107,7 +136,7 @@ function completePrepareReviews(
     true,
     "2026-07-18T14:13:00.000Z",
   );
-  return setMissingOrExpiredReview(
+  return setDocumentReadinessAcknowledgement(
     prepare,
     true,
     "2026-07-18T14:14:00.000Z",
@@ -145,7 +174,7 @@ async function expectPreparePanelsToInitialize() {
   expect(
     screen.getByRole("heading", {
       level: 2,
-      name: "Missing or expired items",
+      name: "Document-readiness results",
     }),
   ).toBeVisible();
   expect(
@@ -188,6 +217,28 @@ describe("Prepare packet workflow", () => {
     ).not.toBeInTheDocument();
 
     await expectPrepareReviewsToBeAvailableAndPending();
+
+    const readinessResults = screen.getByRole("region", {
+      name: "Document-readiness results",
+    });
+    const identityCard = within(readinessResults)
+      .getByRole("heading", { level: 3, name: "Identity document" })
+      .closest("article");
+    const incomeCard = within(readinessResults)
+      .getByRole("heading", { level: 3, name: "Income documentation" })
+      .closest("article");
+    const residencyCard = within(readinessResults)
+      .getByRole("heading", { level: 3, name: "Residency documentation" })
+      .closest("article");
+    expect(identityCard).toHaveTextContent("Status: Missing");
+    expect(identityCard).toHaveTextContent(
+      "No matching confirmed document metadata",
+    );
+    expect(incomeCard).toHaveTextContent("Status: Present");
+    expect(residencyCard).toHaveTextContent("Status: Present");
+    expect(readinessResults).toHaveTextContent(
+      "Prototype readiness check — not an official property requirement",
+    );
 
     expect(
       await screen.findByText("0 of 4 Prepare reviews completed"),
@@ -246,7 +297,8 @@ describe("Prepare packet workflow", () => {
       "Confirmed income-related information",
       "Transparent annualised calculation",
       "Verified HUD reference comparison",
-      "Document-readiness checklist",
+      "Document-readiness results",
+      "Renter review acknowledgements",
       "Confirmed source-document metadata",
       "Source and decision boundaries",
     ];

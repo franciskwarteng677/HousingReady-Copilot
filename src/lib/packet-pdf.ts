@@ -31,6 +31,30 @@ function formatDocumentPages(pages: readonly number[]): string {
   return pages.length === 0 ? "No confirmed field page retained" : pages.join(", ");
 }
 
+function readinessCategoryLabel(category: string): string {
+  return category.charAt(0).toLocaleUpperCase("en-US") + category.slice(1);
+}
+
+function readinessSupportingMetadata(
+  result: ReadinessPacketContent["documentReadinessResults"]["results"][number],
+): string {
+  if (result.supportingDocuments.length === 0) {
+    return "Supporting confirmed metadata: None";
+  }
+
+  return `Supporting confirmed metadata: ${result.supportingDocuments
+    .map((document) => {
+      const type = document.normalizedDocumentType
+        ? `type ${document.normalizedDocumentType}`
+        : document.sampleKind
+          ? `sample kind ${document.sampleKind}`
+          : "allowlisted metadata";
+
+      return `${document.documentName} (${type}; pages ${formatDocumentPages(document.sourcePages)}; matched by ${document.matchBasis})`;
+    })
+    .join("; ")}`;
+}
+
 /**
  * Exposes the deterministic, searchable text command model separately from
  * binary rendering so packet safety and content can be verified directly.
@@ -40,6 +64,9 @@ export function buildReadinessPacketPdfSections(
 ): readonly PacketPdfSection[] {
   const comparison = packet.hudReferenceComparison;
   const official = packet.sourceAndDecisionBoundaries.officialHudData;
+  const readiness = packet.documentReadinessResults;
+  const arithmetic = packet.sourceAndDecisionBoundaries.productArithmetic;
+  const policy = packet.sourceAndDecisionBoundaries.productPolicy;
 
   return [
     {
@@ -73,45 +100,6 @@ export function buildReadinessPacketPdfSections(
       ],
     },
     {
-      heading: "Transparent annualised calculation",
-      paragraphs: [
-        `Calculated: ${packet.annualisedCalculation.calculatedAtDisplay}`,
-        `Employment formula: ${packet.annualisedCalculation.employment.formula}`,
-        `Employment substitution: ${packet.annualisedCalculation.employment.substitution} = ${packet.annualisedCalculation.employment.formattedResult}`,
-        `Benefit formula: ${packet.annualisedCalculation.benefits.formula}`,
-        `Benefit substitution: ${packet.annualisedCalculation.benefits.substitution} = ${packet.annualisedCalculation.benefits.formattedResult}`,
-        `Combined formula: ${packet.annualisedCalculation.combined.formula}`,
-        `Combined substitution: ${packet.annualisedCalculation.combined.substitution} = ${packet.annualisedCalculation.combined.formattedResult}`,
-        packet.annualisedCalculation.explanation,
-      ],
-    },
-    {
-      heading: "Verified HUD reference comparison",
-      paragraphs: [
-        `Rule year: ${comparison.ruleYear}`,
-        `Effective date: ${comparison.effectiveDateDisplay}`,
-        `Geography: ${comparison.geography}`,
-        `Household size: ${comparison.householdSize}`,
-        `Selected threshold type: ${comparison.thresholdType}`,
-        `Official reference threshold: ${comparison.formattedOfficialThreshold}`,
-        `Confirmed annualised amount: ${comparison.formattedConfirmedAnnualisedAmount}`,
-        `Absolute difference: ${comparison.formattedAbsoluteDifference}`,
-        `Difference calculation: ${comparison.differenceCalculation}`,
-        comparison.neutralStatement,
-        comparison.context,
-      ],
-    },
-    {
-      heading: "Document-readiness checklist",
-      paragraphs: [
-        `Reviewed: ${packet.documentReadinessChecklist.reviewedAtDisplay}`,
-        ...packet.documentReadinessChecklist.items.map(
-          (item) => `${item.label} — ${item.status}`,
-        ),
-        packet.documentReadinessChecklist.disclaimer,
-      ],
-    },
-    {
       heading: "Confirmed source-document metadata",
       paragraphs:
         packet.sourceDocumentMetadata.length === 0
@@ -122,20 +110,72 @@ export function buildReadinessPacketPdfSections(
             ),
     },
     {
-      heading: "Source and decision boundaries",
+      heading: readiness.heading,
       paragraphs: [
-        `A. ${official.classification} — ${official.verificationLabel}`,
+        `Classification: ${readiness.sourceClassification}`,
+        readiness.prototypeLabel,
+        `Checklist version: ${readiness.checklistVersion}`,
+        `Review timestamp: ${readiness.reviewedAtDisplay}`,
+        `Acknowledgement status: ${readiness.acknowledgementStatus}`,
+        ...readiness.results.flatMap((result) => [
+          `${readinessCategoryLabel(result.category)}: ${result.statusLabel} — ${result.title}. ${result.explanation}`,
+          readinessSupportingMetadata(result),
+        ]),
+        readiness.disclaimer,
+      ],
+    },
+    {
+      heading: "Renter review acknowledgements",
+      paragraphs: [
+        `Review state last updated: ${packet.documentReadinessChecklist.reviewedAtDisplay}`,
+        ...packet.documentReadinessChecklist.items.map(
+          (item) => `${item.label} — ${item.status}`,
+        ),
+        packet.documentReadinessChecklist.disclaimer,
+      ],
+    },
+    {
+      heading: "Verified official HUD reference data",
+      paragraphs: [
+        `Classification: ${official.classification} — ${official.verificationLabel}`,
         `Publisher: ${official.publisher}`,
         `Dataset: ${official.datasetTitle}`,
+        `Rule year: ${comparison.ruleYear}`,
+        `Effective date: ${comparison.effectiveDateDisplay}`,
+        `Geography: ${comparison.geography}`,
+        `Household size used to select the row: ${comparison.householdSize}`,
+        `Selected threshold type: ${comparison.thresholdType}`,
+        `Official reference threshold: ${comparison.formattedOfficialThreshold}`,
         `Citation: ${official.citationIdentifier}`,
         `Official PDF page: ${official.pdfPage} of ${official.pdfPageCount}`,
         `Official dataset page: ${official.datasetPageUrl}`,
         `Official PDF: ${official.pdfUrl}`,
-        `B. ${packet.sourceAndDecisionBoundaries.productArithmetic.classification}`,
-        packet.sourceAndDecisionBoundaries.productArithmetic.explanation,
-        `C. ${packet.sourceAndDecisionBoundaries.productPolicy.classification}`,
-        packet.sourceAndDecisionBoundaries.productPolicy.coverDisclaimer,
-        packet.sourceAndDecisionBoundaries.productPolicy.finalReviewStatement,
+      ],
+    },
+    {
+      heading: "Deterministic HousingReady arithmetic",
+      paragraphs: [
+        `Classification: ${arithmetic.classification}`,
+        `Calculation version: ${arithmetic.calculationVersion}`,
+        `Calculated: ${packet.annualisedCalculation.calculatedAtDisplay}`,
+        `Employment formula: ${packet.annualisedCalculation.employment.formula}`,
+        `Employment substitution: ${packet.annualisedCalculation.employment.substitution} = ${packet.annualisedCalculation.employment.formattedResult}`,
+        `Benefit formula: ${packet.annualisedCalculation.benefits.formula}`,
+        `Benefit substitution: ${packet.annualisedCalculation.benefits.substitution} = ${packet.annualisedCalculation.benefits.formattedResult}`,
+        `Combined formula: ${packet.annualisedCalculation.combined.formula}`,
+        `Combined substitution: ${packet.annualisedCalculation.combined.substitution} = ${packet.annualisedCalculation.combined.formattedResult}`,
+        `Difference calculation: ${comparison.differenceCalculation}`,
+        comparison.neutralStatement,
+        arithmetic.explanation,
+      ],
+    },
+    {
+      heading: "HousingReady product policy and decision boundary",
+      paragraphs: [
+        `Classification: ${policy.classification}`,
+        comparison.context,
+        policy.coverDisclaimer,
+        policy.finalReviewStatement,
       ],
     },
   ];

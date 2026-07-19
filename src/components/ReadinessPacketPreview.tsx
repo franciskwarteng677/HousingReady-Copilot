@@ -2,11 +2,13 @@ import {
   BadgeCheck,
   Calculator,
   CheckCircle2,
+  CircleAlert,
   FileCheck2,
   FileText,
   Landmark,
   Scale,
   ShieldCheck,
+  TriangleAlert,
   UserRound,
 } from "lucide-react";
 import type {
@@ -77,9 +79,13 @@ export function ReadinessPacketPreview({
   return (
     <section
       aria-labelledby="packet-preview-title"
-      className="rounded-2xl border border-brand/30 bg-white shadow-card"
+      className="overflow-hidden rounded-2xl border border-brand/25 bg-white/95 shadow-[0_30px_75px_-48px_rgba(11,118,110,0.75)] ring-1 ring-white/70"
     >
-      <div className="rounded-t-2xl bg-ink px-5 py-6 text-white sm:px-7">
+      <div className="relative overflow-hidden bg-[linear-gradient(135deg,#153047,#123e4c_58%,#0b5d5b)] px-5 py-7 text-white sm:px-7">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-14 -top-20 size-56 rounded-full border-[28px] border-white/[0.04]"
+        />
         <p className="inline-flex items-center gap-2 text-sm font-bold text-teal-200">
           <FileCheck2 aria-hidden="true" size={18} />
           Packet preview ready
@@ -100,7 +106,7 @@ export function ReadinessPacketPreview({
           {packet.cover.productName} · Generated {packet.cover.generatedAtDisplay}
           {" · "}Profile revision {packet.cover.profileRevision}
         </p>
-        <p className="mt-5 rounded-xl border border-amber-300/40 bg-amber-200/10 p-4 font-bold leading-6 text-amber-100">
+          <p className="relative mt-5 rounded-xl border border-amber-300/40 bg-amber-200/10 p-4 font-bold leading-6 text-amber-100 backdrop-blur-sm">
           {packet.cover.disclaimer}
         </p>
       </div>
@@ -270,6 +276,108 @@ export function ReadinessPacketPreview({
           </p>
         </section>
 
+        <section aria-labelledby="packet-readiness-results-title">
+          <div className="flex items-center gap-2">
+            <FileCheck2 aria-hidden="true" size={21} className="text-brand" />
+            <h3
+              id="packet-readiness-results-title"
+              className="text-xl font-bold text-ink"
+            >
+              {packet.documentReadinessResults.heading}
+            </h3>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {packet.documentReadinessResults.results.map((result) => {
+              const StatusIcon =
+                result.status === "present"
+                  ? CheckCircle2
+                  : result.status === "missing"
+                    ? CircleAlert
+                    : TriangleAlert;
+
+              return (
+                <article
+                  key={result.requirementId}
+                  className="min-w-0 rounded-xl border border-line bg-canvas p-4"
+                >
+                  <div className="flex items-start gap-2">
+                    <StatusIcon
+                      aria-hidden="true"
+                      size={18}
+                      className="mt-0.5 shrink-0 text-brand-dark"
+                    />
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-ink">{result.title}</h4>
+                      <p className="mt-1 text-sm font-extrabold text-brand-dark">
+                        Status: {result.statusLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    {result.explanation}
+                  </p>
+                  {result.supportingDocuments.length > 0 ? (
+                    <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+                      {result.supportingDocuments.map((document, index) => (
+                        <li
+                          key={`${document.documentName}-${index}`}
+                          className="break-words rounded-lg border border-line bg-white p-2.5"
+                        >
+                          {document.documentName}
+                          {document.normalizedDocumentType
+                            ? ` · type: ${document.normalizedDocumentType}`
+                            : document.sampleKind
+                              ? ` · sample kind: ${document.sampleKind}`
+                              : ""}
+                          {document.sourcePages.length > 0
+                            ? ` · page ${document.sourcePages.join(", ")}`
+                            : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-3 text-xs font-bold text-slate-700">
+                      No matching confirmed document metadata
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <dl className="mt-4 grid gap-3 rounded-xl border border-brand/20 bg-brand-soft p-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="font-bold text-slate-600">Checklist version</dt>
+              <dd className="mt-1 break-all font-bold text-ink">
+                {packet.documentReadinessResults.checklistVersion}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-600">Review timestamp</dt>
+              <dd className="mt-1 font-bold text-ink">
+                {packet.documentReadinessResults.reviewedAtDisplay}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-600">Acknowledgement</dt>
+              <dd className="mt-1 font-bold text-ink">
+                {packet.documentReadinessResults.acknowledgementStatus}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-bold text-slate-600">Checklist source</dt>
+              <dd className="mt-1 font-bold text-ink">
+                {packet.documentReadinessResults.sourceClassification}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-4 font-bold leading-6 text-amber-950">
+            {packet.documentReadinessResults.prototypeLabel}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-700">
+            {packet.documentReadinessResults.disclaimer}
+          </p>
+        </section>
+
         <section aria-labelledby="packet-checklist-title">
           <div className="flex items-center gap-2">
             <CheckCircle2 aria-hidden="true" size={21} className="text-brand" />
@@ -277,7 +385,7 @@ export function ReadinessPacketPreview({
               id="packet-checklist-title"
               className="text-xl font-bold text-ink"
             >
-              Document-readiness checklist
+              Renter review acknowledgements
             </h3>
           </div>
           <ul className="mt-4 grid gap-3 sm:grid-cols-2">

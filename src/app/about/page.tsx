@@ -13,7 +13,7 @@ const supportedTasks = [
   "Organize synthetic application documents",
   "Help renters confirm extracted information",
   "Explain published program rules with citations",
-  "Flag missing or expired packet items",
+  "Show deterministic present or missing document categories",
   "Prepare a renter-controlled application packet",
 ];
 
@@ -43,7 +43,7 @@ export default function AboutPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <section
           aria-labelledby="helps-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card sm:p-7"
+          className="rounded-2xl border border-brand/15 bg-white/95 p-6 shadow-card ring-1 ring-white/70 sm:p-7"
         >
           <h2 id="helps-title" className="text-xl font-bold text-ink">
             What it helps with
@@ -64,7 +64,7 @@ export default function AboutPage() {
 
         <section
           aria-labelledby="never-title"
-          className="rounded-2xl border border-line bg-sun-soft p-6 sm:p-7"
+          className="rounded-2xl border border-amber-200 bg-[linear-gradient(135deg,#fffaf0,#fff7df)] p-6 shadow-[0_18px_45px_-36px_rgba(146,89,10,0.35)] sm:p-7"
         >
           <h2 id="never-title" className="text-xl font-bold text-ink">
             What it never does
@@ -86,7 +86,7 @@ export default function AboutPage() {
 
       <section
         aria-labelledby="workflow-title"
-        className="mt-6 rounded-2xl border border-line bg-white p-6 shadow-card sm:p-7"
+        className="mt-6 rounded-2xl border border-brand/15 bg-white/95 p-6 shadow-card ring-1 ring-white/70 sm:p-7"
       >
         <h2 id="workflow-title" className="text-xl font-bold text-ink">
           A transparent three-stage workflow
@@ -97,7 +97,7 @@ export default function AboutPage() {
             ["2", "Understand", "Read rule explanations, calculations, and official sources."],
             ["3", "Prepare", "Review the checklist and prepare your packet."],
           ].map(([number, title, description]) => (
-            <li key={number} className="rounded-xl border border-line bg-canvas p-5">
+            <li key={number} className="rounded-xl border border-line bg-canvas/80 p-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-md">
               <span className="inline-flex size-8 items-center justify-center rounded-full bg-brand text-sm font-bold text-white">
                 {number}
               </span>

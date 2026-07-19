@@ -2,7 +2,7 @@
 
 HousingReady Copilot is a renter-side affordable-housing application-readiness
 assistant. It helps a renter organize synthetic documents, confirm information,
-understand published program rules, identify missing or expired documents,
+understand published program rules, identify present or missing document categories,
 and prepare an application packet.
 
 It does not approve, deny, rank, score, or determine housing eligibility.
@@ -27,15 +27,17 @@ Open http://localhost:3000.
 Quality checks:
 
     npm run lint
+    npm run typecheck
     npm run test
     npm run build
+    npm audit
 
 ## Routes
 
 - / — product overview
 - /profile — synthetic document upload, preview, extraction evidence, correction, and confirmation
 - /understand — confirmed Profile information, deterministic income arithmetic, verified frozen HUD threshold comparison, citations, and review acknowledgement
-- /prepare — explicit document-category review, missing-or-expired acknowledgement, packet preview, and renter-controlled PDF download
+- /prepare — deterministic document-readiness results, explicit renter review, packet preview, and renter-controlled PDF download
 - /privacy — prototype privacy and safety boundaries
 - /about — product purpose and non-goals
 
@@ -75,14 +77,16 @@ results, and review acknowledgement metadata bound to the Profile revision,
 household size, calculation inputs, and HUD source version. Questions and
 answer history are not persisted.
 
-The Prepare stage stores only its schema version, a binding to the current
-Profile revision and acknowledged Understand review, three document-category
-review flags, the missing-or-expired review flag, and created/updated
-timestamps. The binding records the Profile fingerprint and revision,
-Understand acknowledgement time, household size, calculation-input
-fingerprint, and threshold source ID/version. It does not copy Profile values,
-document content, the packet preview, PDF bytes, source text, source URLs, or
-object URLs into session storage.
+The Prepare stage uses the versioned `housingready:prepare:v2` key. It stores
+only its schema version, a binding to the current Profile revision and
+acknowledged Understand review, three document-category review flags, the
+document-readiness acknowledgement timestamp, and created/updated timestamps.
+The binding records the Profile fingerprint and revision, readiness-checklist
+version, Understand acknowledgement time, household size, calculation-input
+fingerprint, and threshold source ID/version. Readiness results are recalculated
+from the current confirmed metadata; they are not copied into storage. Prepare
+does not store Profile values, document content, the packet preview, PDF bytes,
+source text, source URLs, or object URLs.
 
 A confirmed Profile correction immediately invalidates the saved Understand
 review and any Prepare review. A changed household size, calculation input,
@@ -99,7 +103,7 @@ four renter actions begin unchecked:
 1. Review identity documentation.
 2. Review income documentation.
 3. Review residency documentation.
-4. Review the missing-or-expired items section.
+4. Review and acknowledge the calculated document-readiness results.
 
 The packet preview is reconstructed in the browser from the validated current
 Profile, acknowledged Understand state, frozen HUD corpus, and these explicit
@@ -121,7 +125,37 @@ The reconstructed packet contains these application-preparation sections:
   threshold;
 - the verified HUD source title, publisher, geography, rule year, effective
   date, cited table row, and source link; and
+- the three deterministic prototype document-readiness results, checklist
+  version, review timestamp, acknowledgement status, and disclaimer;
 - the explicit Prepare review state and prominent decision-boundary notices.
+
+## Deterministic document-readiness checklist
+
+`src/lib/readiness/checklist.ts` contains the typed, immutable
+`housingready-prototype-readiness-v1` definition. It is HousingReady Copilot
+product guidance, not an official HUD, property, landlord, or housing-provider
+checklist. The same pure evaluation is used by the Prepare page, packet preview,
+and downloaded PDF.
+
+The current rules are intentionally narrow:
+
+- Identity document is Present only when retained, reviewed metadata matches an
+  explicitly allowlisted identity-document type. None of the three provided
+  samples does, so the expected status is Missing.
+- Income documentation is Present when reviewed metadata matches an allowlisted
+  pay-stub or benefits-letter type or one of those exact provided synthetic
+  samples.
+- Residency documentation is Present when reviewed metadata matches an
+  allowlisted residency type or the provided synthetic residency sample.
+
+A confirmed normalized document type takes precedence. Structured sample kind
+is considered only when that type is absent; filename fallback is limited to
+the exact committed synthetic filenames. Unknown metadata cannot satisfy a
+category. An allowlisted match whose Profile state is not reviewed is marked
+Needs review. No item is called expired because this checklist has neither an
+explicit expiration rule nor a confirmed expiration date. The calculation does
+not read income, HUD threshold results, protected characteristics, or inferred
+household relationships.
 
 It deliberately excludes:
 
@@ -197,19 +231,24 @@ to regenerate and visually verify the documents.
    deterministic calculation, the neutral standard 60% MTSP comparison, the
    official HUD citation on PDF page 130, and the May 1, 2026 effective date.
    Acknowledge the review and continue to Prepare.
-5. In **Prepare**, confirm all four review controls begin unchecked. Check the
-   three document categories; verify Download remains disabled. Check the
-   missing-or-expired acknowledgement and verify the reconstructed preview and
-   Download become available.
+5. In **Prepare**, verify the calculated cards read **Identity document —
+   Missing**, **Income documentation — Present**, and **Residency documentation
+   — Present**. Inspect their supporting metadata, checklist source and version,
+   and prototype-rule warning. Confirm all four review controls begin unchecked.
+   Check the three document-category controls; verify Download remains disabled.
+   Check **I reviewed the document-readiness results** and verify the
+   reconstructed preview and Download become available.
 6. Refresh `/prepare`. Verify the four reviews remain checked and the preview
    is rebuilt from current structured state. Inspect session storage: the
-   Prepare value may contain only its binding, four review booleans, and
-   timestamps. It must not contain PDF bytes, `sourceText`, `blob:`/object URLs,
-   or a copied packet model.
+   Prepare value may contain only its versioned binding, three category-review
+   booleans, readiness acknowledgement timestamp, and created/updated
+   timestamps. It must not contain calculated readiness results, PDF bytes,
+   `sourceText`, `blob:`/object URLs, or a copied packet model.
 7. Activate Download once. Open the PDF and verify its headings, confirmed
-   values, document metadata, arithmetic, neutral comparison, official source
-   and effective date, explicit review state, page breaks, and non-eligibility
-   notice. Confirm that no raw source document or full extraction text appears.
+   values, document metadata, the three document-readiness results and
+   disclaimer, arithmetic, neutral comparison, official source and effective
+   date, explicit review state, page breaks, and non-eligibility notice. Confirm
+   that no raw source document or full extraction text appears.
 8. Return to Profile and correct a confirmed value. Verify Prepare relocks and
    its prior review flags are discarded. Revisit Understand, review and
    acknowledge the updated calculation, then confirm Prepare starts a fresh

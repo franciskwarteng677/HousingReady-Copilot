@@ -8,7 +8,6 @@ import {
   FileStack,
   LoaderCircle,
   ShieldCheck,
-  TriangleAlert,
 } from "lucide-react";
 import {
   useCallback,
@@ -18,6 +17,7 @@ import {
   useState,
 } from "react";
 import { usePrepareWorkflowState } from "@/components/PrepareAccessGuard";
+import { DocumentReadinessResults } from "@/components/DocumentReadinessResults";
 import { ReadinessPacketPreview } from "@/components/ReadinessPacketPreview";
 import { formatCurrencyFromCents } from "@/lib/income-calculation";
 import {
@@ -31,12 +31,15 @@ import type {
 import {
   createPrepareSession,
   getPrepareReviewProgress,
+  LEGACY_PREPARE_SESSION_KEY,
   loadCurrentPrepareSession,
+  PREPARE_SESSION_KEY,
   PREPARE_UPDATED_EVENT,
   savePrepareSession,
-  setMissingOrExpiredReview,
+  setDocumentReadinessAcknowledgement,
   setPrepareDocumentReview,
 } from "@/lib/prepare-session";
+import { evaluateDocumentReadiness } from "@/lib/readiness/checklist";
 import { SESSION_DELETED_EVENT } from "@/lib/session";
 
 const checklistItems: readonly {
@@ -68,7 +71,7 @@ const pendingRequirementLabels = {
   "identity-document": "Identity document review",
   "income-documentation": "Income documentation review",
   "residency-documentation": "Residency documentation review",
-  "missing-or-expired": "Missing or expired items review",
+  "document-readiness-results": "Document-readiness results acknowledgement",
 } as const;
 
 type GenerationStatus = "idle" | "generating" | "success" | "error";
@@ -94,6 +97,10 @@ export function PrepareWorkflow() {
   );
   const householdSize = understand.householdSize?.value;
   const combinedAnnualisedCents = understand.calculation?.combined.resultCents;
+  const readinessEvaluation = useMemo(
+    () => evaluateDocumentReadiness(profile),
+    [profile],
+  );
 
   const revokeTemporaryPdfUrl = useCallback(() => {
     if (revokeTimerRef.current !== null) {
@@ -109,6 +116,10 @@ export function PrepareWorkflow() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
+      const hadStoredPrepareState = Boolean(
+        window.sessionStorage.getItem(PREPARE_SESSION_KEY) ??
+          window.sessionStorage.getItem(LEGACY_PREPARE_SESSION_KEY),
+      );
       const restored = loadCurrentPrepareSession(
         window.sessionStorage,
         profile,
@@ -123,6 +134,22 @@ export function PrepareWorkflow() {
 
       setPrepareSession(nextSession);
       setPrepareStateLoaded(true);
+      const resultSummary = readinessEvaluation.results
+        .map(
+          (result) =>
+            `${result.title}: ${result.status.replace("_", " ")}`,
+        )
+        .join("; ");
+
+      if (!restored && (hadStoredPrepareState || profile.revision > 1)) {
+        setAnnouncement(
+          `Prepare reviews were reset because the confirmed Profile or checklist version changed. Review the updated results again. ${resultSummary}.`,
+        );
+      } else {
+        setAnnouncement(
+          `Document-readiness results calculated from confirmed metadata. ${resultSummary}.`,
+        );
+      }
     }, 0);
 
     function handleSessionDeleted() {
@@ -141,7 +168,7 @@ export function PrepareWorkflow() {
       window.removeEventListener(SESSION_DELETED_EVENT, handleSessionDeleted);
       revokeTemporaryPdfUrl();
     };
-  }, [profile, understand, revokeTemporaryPdfUrl]);
+  }, [profile, readinessEvaluation, understand, revokeTemporaryPdfUrl]);
 
   const reviewProgress = useMemo(
     () =>
@@ -226,14 +253,14 @@ export function PrepareWorkflow() {
     );
   }
 
-  function updateMissingOrExpiredReview(checked: boolean) {
+  function updateDocumentReadinessAcknowledgement(checked: boolean) {
     if (!prepareSession) {
       return;
     }
 
     persistPrepareSession(
-      setMissingOrExpiredReview(prepareSession, checked),
-      `Missing or expired items marked ${checked ? "reviewed" : "not reviewed"}.`,
+      setDocumentReadinessAcknowledgement(prepareSession, checked),
+      `Document-readiness results marked ${checked ? "reviewed" : "not reviewed"}.`,
     );
   }
 
@@ -308,7 +335,7 @@ export function PrepareWorkflow() {
     <div className="space-y-5">
       <section
         aria-labelledby="prepare-prerequisites-title"
-        className="rounded-2xl border border-brand/30 bg-brand-soft p-5 shadow-card sm:p-6"
+        className="relative overflow-hidden rounded-2xl border border-brand/25 bg-[linear-gradient(135deg,#e8f5f1,#f3fbff)] p-5 shadow-[0_24px_55px_-40px_rgba(11,118,110,0.6)] ring-1 ring-white/70 sm:p-6"
       >
         <p className="inline-flex items-center gap-2 text-sm font-bold text-brand-dark">
           <ShieldCheck aria-hidden="true" size={18} />
@@ -326,19 +353,19 @@ export function PrepareWorkflow() {
           controls packet access.
         </p>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-brand/20 bg-white p-3">
+          <div className="rounded-xl border border-brand/15 bg-white/90 p-3 shadow-sm">
             <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
               Profile revision
             </dt>
             <dd className="mt-1 font-extrabold text-ink">{profile.revision}</dd>
           </div>
-          <div className="rounded-xl border border-brand/20 bg-white p-3">
+          <div className="rounded-xl border border-brand/15 bg-white/90 p-3 shadow-sm">
             <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
               Gross pay
             </dt>
             <dd className="mt-1 font-extrabold text-ink">{grossPayDisplay}</dd>
           </div>
-          <div className="rounded-xl border border-brand/20 bg-white p-3">
+          <div className="rounded-xl border border-brand/15 bg-white/90 p-3 shadow-sm">
             <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
               Household size
             </dt>
@@ -346,7 +373,7 @@ export function PrepareWorkflow() {
               {householdSize ?? "Not confirmed"}
             </dd>
           </div>
-          <div className="rounded-xl border border-brand/20 bg-white p-3">
+          <div className="rounded-xl border border-brand/15 bg-white/90 p-3 shadow-sm">
             <dt className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
               Annualised amount
             </dt>
@@ -360,7 +387,7 @@ export function PrepareWorkflow() {
       </section>
 
       <p
-        className="rounded-xl border border-line bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm"
+        className="rounded-xl border border-brand/15 bg-white/95 px-4 py-3 text-sm font-extrabold text-slate-700 shadow-sm ring-1 ring-white/70"
         role="status"
       >
         {prepareStateLoaded
@@ -371,7 +398,7 @@ export function PrepareWorkflow() {
       <div className="grid gap-5 lg:grid-cols-2">
         <section
           aria-labelledby="checklist-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card"
+          className="rounded-2xl border border-brand/15 bg-white/95 p-6 shadow-card ring-1 ring-white/70"
         >
           <ClipboardCheck aria-hidden="true" size={23} className="text-brand" />
           <h2 id="checklist-title" className="mt-4 text-xl font-bold text-ink">
@@ -392,7 +419,7 @@ export function PrepareWorkflow() {
                 return (
                   <label
                     key={item.id}
-                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-line p-4 outline-none transition-colors hover:border-brand/40 hover:bg-brand-soft/30 focus-within:ring-4 focus-within:ring-teal-200"
+                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-white p-4 shadow-sm outline-none transition-[transform,border-color,background-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/40 hover:bg-brand-soft/30 hover:shadow-md focus-within:ring-4 focus-within:ring-teal-200"
                   >
                     <input
                       type="checkbox"
@@ -426,46 +453,12 @@ export function PrepareWorkflow() {
           </fieldset>
         </section>
 
-        <section
-          aria-labelledby="missing-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card"
-        >
-          <TriangleAlert aria-hidden="true" size={23} className="text-amber-700" />
-          <h2 id="missing-title" className="mt-4 text-xl font-bold text-ink">
-            Missing or expired items
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            No missing, expired, valid, or accepted status is decided
-            automatically. Record only that you reviewed this section.
-          </p>
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-sun-soft p-4 outline-none focus-within:ring-4 focus-within:ring-amber-200">
-            <input
-              type="checkbox"
-              aria-label="I reviewed missing or expired items"
-              checked={prepareSession?.missingOrExpiredReviewed ?? false}
-              disabled={!prepareStateLoaded}
-              onChange={(event) =>
-                updateMissingOrExpiredReview(event.target.checked)
-              }
-              className="mt-1 size-5 shrink-0 accent-brand"
-            />
-            <span>
-              <span className="block font-bold text-ink">
-                I reviewed missing or expired items
-              </span>
-              <span className="mt-1 block text-sm leading-6 text-slate-600">
-                This records only your review action. It does not certify
-                document validity, completeness, acceptance, or compliance.
-              </span>
-              <span className="mt-2 block text-xs font-bold text-amber-950">
-                Status:{" "}
-                {prepareSession?.missingOrExpiredReviewed
-                  ? "Reviewed by renter"
-                  : "Not reviewed"}
-              </span>
-            </span>
-          </label>
-        </section>
+        <DocumentReadinessResults
+          evaluation={readinessEvaluation}
+          acknowledged={reviewProgress.readinessResultsAcknowledged}
+          disabled={!prepareStateLoaded}
+          onAcknowledgementChange={updateDocumentReadinessAcknowledgement}
+        />
       </div>
 
       {packet ? (
@@ -473,13 +466,13 @@ export function PrepareWorkflow() {
       ) : (
         <section
           aria-labelledby="packet-preview-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card"
+          className="rounded-2xl border border-brand/15 bg-white/95 p-6 shadow-card ring-1 ring-white/70"
         >
           <FileStack aria-hidden="true" size={23} className="text-brand" />
           <h2 id="packet-preview-title" className="mt-4 text-xl font-bold text-ink">
             Packet preview
           </h2>
-          <div className="mt-5 flex min-h-52 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-canvas p-6 text-center">
+          <div className="mt-5 flex min-h-52 items-center justify-center rounded-xl border-2 border-dashed border-brand/25 bg-[linear-gradient(135deg,rgba(245,247,246,0.9),rgba(232,245,241,0.55))] p-6 text-center">
             <div>
               <FileStack
                 aria-hidden="true"
@@ -503,7 +496,7 @@ export function PrepareWorkflow() {
 
       <section
         aria-labelledby="download-title"
-        className="rounded-2xl border border-line bg-ink p-6 text-white shadow-card"
+        className="relative overflow-hidden rounded-2xl border border-slate-700 bg-[linear-gradient(135deg,#153047,#123e4c_58%,#0b5d5b)] p-6 text-white shadow-[0_30px_70px_-42px_rgba(15,47,66,0.9)] ring-1 ring-white/10"
       >
         <Download aria-hidden="true" size={23} className="text-teal-300" />
         <h2 id="download-title" className="mt-4 text-xl font-bold">
@@ -544,7 +537,7 @@ export function PrepareWorkflow() {
           disabled={!packetReady || generationStatus === "generating"}
           aria-describedby="download-help"
           onClick={downloadPacket}
-          className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-bold text-ink outline-none transition-colors hover:bg-teal-50 focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/70"
+          className="group mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-extrabold text-ink shadow-lg outline-none transition-[transform,background-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:bg-teal-50 hover:shadow-xl motion-safe:active:translate-y-0 focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/70 disabled:shadow-none"
         >
           {generationStatus === "generating" ? (
             <>
@@ -553,7 +546,11 @@ export function PrepareWorkflow() {
             </>
           ) : (
             <>
-              <Download aria-hidden="true" size={19} />
+              <Download
+                aria-hidden="true"
+                size={19}
+                className="transition-transform duration-200 motion-safe:group-hover:translate-y-0.5"
+              />
               Download readiness packet PDF
             </>
           )}

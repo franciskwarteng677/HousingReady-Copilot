@@ -115,7 +115,7 @@ export function ThresholdComparisonPanel({
   return (
     <section
       aria-labelledby="threshold-comparison-heading"
-      className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-7"
+      className="rounded-2xl border border-sky-200/80 bg-white/95 p-5 shadow-[0_24px_60px_-42px_rgba(14,91,125,0.55)] ring-1 ring-white/70 sm:p-7"
     >
       <p className="inline-flex items-center gap-2 text-sm font-bold text-brand">
         <Scale aria-hidden="true" size={18} />
@@ -136,7 +136,7 @@ export function ThresholdComparisonPanel({
           </p>
         </div>
         {officialSource ? (
-          <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand-dark">
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand-soft px-3 py-1.5 text-xs font-extrabold text-brand-dark shadow-sm">
             <BadgeCheck aria-hidden="true" size={16} />
             Verified official HUD source
           </span>
@@ -238,7 +238,7 @@ export function ThresholdComparisonPanel({
             </div>
           </dl>
 
-          <div className="mt-4 rounded-xl border border-brand bg-brand-soft p-4 sm:p-5">
+          <div className="mt-4 rounded-xl border border-brand/40 bg-[linear-gradient(135deg,#e8f5f1,#eff8ff)] p-4 shadow-[0_18px_40px_-32px_rgba(11,118,110,0.55)] sm:p-5">
             <p className="text-sm font-semibold text-slate-600">
               Product arithmetic — deterministic comparison
             </p>
@@ -258,7 +258,7 @@ export function ThresholdComparisonPanel({
             </p>
           </div>
 
-          <div className="mt-4 rounded-xl border-2 border-ink bg-ink p-5 text-white">
+          <div className="mt-4 rounded-xl border border-slate-700 bg-[linear-gradient(135deg,#153047,#123e4c)] p-5 text-white shadow-lg shadow-slate-950/10">
             <p className="flex items-start gap-2 text-base font-extrabold leading-7">
               <ShieldAlert
                 aria-hidden="true"
@@ -354,7 +354,7 @@ export function ThresholdComparisonPanel({
             aria-pressed={ruleReviewComplete}
             onClick={onConfirmReview}
             disabled={ruleReviewComplete}
-            className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-bold text-white outline-none hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-700 sm:w-auto"
+            className="group mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-teal-900/15 outline-none transition-[transform,background-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:bg-brand-dark hover:shadow-xl focus-visible:ring-4 focus-visible:ring-teal-200 motion-safe:active:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-700 disabled:shadow-none sm:w-auto"
           >
             <CheckCircle2 aria-hidden="true" size={18} />
             I reviewed the comparison and official source

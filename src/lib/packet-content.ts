@@ -15,6 +15,13 @@ import {
   type PrepareSession,
 } from "@/lib/prepare-schema";
 import { getPrepareReviewProgress } from "@/lib/prepare-session";
+import {
+  READINESS_RESULTS_DISCLAIMER,
+  evaluateDocumentReadiness,
+  type DocumentReadinessStatus,
+  type ReadinessRequirementId,
+  type ReadinessSupportingDocument,
+} from "@/lib/readiness/checklist";
 import type { RuleCorpus } from "@/lib/rules-schema";
 import type { UnderstandSession } from "@/lib/understand-schema";
 import {
@@ -36,6 +43,9 @@ export const PACKET_ARITHMETIC_EXPLANATION =
 
 export const PACKET_THRESHOLD_CONTEXT =
   "The 60% MTSP value is a reference threshold selected for this frozen prototype scenario. Different properties, set-asides, project histories, programs, or rules may require different limits.";
+
+export const PACKET_READINESS_ACKNOWLEDGEMENT_STATUS =
+  "Acknowledged by renter" as const;
 
 export type PacketFieldSource = Readonly<{
   documentName: string;
@@ -62,6 +72,25 @@ export type PacketDocumentMetadata = Readonly<{
   category: string;
   profileReviewStatus: "Profile review recorded" | "Profile no-call recorded";
   sourcePages: readonly number[];
+}>;
+
+export type PacketDocumentReadinessSupportingDocument = Readonly<{
+  documentName: string;
+  normalizedDocumentType: string | null;
+  sampleKind: ReadinessSupportingDocument["sampleKind"];
+  reviewState: ReadinessSupportingDocument["reviewState"];
+  sourcePages: readonly number[];
+  matchBasis: ReadinessSupportingDocument["matchBasis"];
+}>;
+
+export type PacketDocumentReadinessResult = Readonly<{
+  requirementId: ReadinessRequirementId;
+  title: string;
+  category: string;
+  status: DocumentReadinessStatus;
+  statusLabel: "Present" | "Missing" | "Needs review";
+  explanation: string;
+  supportingDocuments: readonly PacketDocumentReadinessSupportingDocument[];
 }>;
 
 export type ThresholdRelationship = "below" | "above" | "equal";
@@ -141,13 +170,22 @@ export type ReadinessPacketContent = Readonly<{
     neutralStatement: string;
     context: typeof PACKET_THRESHOLD_CONTEXT;
   }>;
+  documentReadinessResults: Readonly<{
+    heading: "Document-readiness results";
+    checklistVersion: string;
+    sourceClassification: string;
+    prototypeLabel: string;
+    reviewedAt: string;
+    reviewedAtDisplay: string;
+    acknowledgementStatus: typeof PACKET_READINESS_ACKNOWLEDGEMENT_STATUS;
+    results: readonly PacketDocumentReadinessResult[];
+    disclaimer: typeof READINESS_RESULTS_DISCLAIMER;
+  }>;
   documentReadinessChecklist: Readonly<{
     reviewedAt: string;
     reviewedAtDisplay: string;
     items: readonly Readonly<{
-      id:
-        | (typeof PREPARE_DOCUMENT_CATEGORY_IDS)[number]
-        | "missing-or-expired-items";
+      id: (typeof PREPARE_DOCUMENT_CATEGORY_IDS)[number];
       label: string;
       status: "Reviewed by renter";
     }>[];
@@ -374,39 +412,39 @@ function buildSourceDocumentMetadata(
   return profile.documents
     .filter((document) => confirmedSourceDocumentIds.has(document.id))
     .map((document) => {
-    const pages = new Set<number>();
-    const confirmedDocumentTypes = new Set<string>();
-    for (const field of profile.confirmedFields) {
-      for (const source of field.sources) {
-        if (source.sourceDocumentId === document.id) {
-          pages.add(source.sourcePage);
-          if (field.fieldId === "documentType") {
-            confirmedDocumentTypes.add(
-              assertSafeDisplayText(field.value, "Confirmed document type"),
-            );
+      const pages = new Set<number>();
+      const confirmedDocumentTypes = new Set<string>();
+      for (const field of profile.confirmedFields) {
+        for (const source of field.sources) {
+          if (source.sourceDocumentId === document.id) {
+            pages.add(source.sourcePage);
+            if (field.fieldId === "documentType") {
+              confirmedDocumentTypes.add(
+                assertSafeDisplayText(field.value, "Confirmed document type"),
+              );
+            }
           }
         }
       }
-    }
 
-    const confirmedDocumentType =
-      confirmedDocumentTypes.size === 1
-        ? Array.from(confirmedDocumentTypes)[0]
-        : null;
+      const confirmedDocumentType =
+        confirmedDocumentTypes.size === 1
+          ? Array.from(confirmedDocumentTypes)[0]
+          : null;
 
-    return {
-      fileName: safeDocumentName(document.name),
-      category:
-        confirmedDocumentType ??
-        (document.sampleKind === null
-          ? "Supporting document"
-          : documentCategoryLabels[document.sampleKind]),
-      profileReviewStatus:
-        document.reviewState === "reviewed"
-          ? "Profile review recorded"
-          : "Profile no-call recorded",
-      sourcePages: Array.from(pages).sort((first, second) => first - second),
-    };
+      return {
+        fileName: safeDocumentName(document.name),
+        category:
+          confirmedDocumentType ??
+          (document.sampleKind === null
+            ? "Supporting document"
+            : documentCategoryLabels[document.sampleKind]),
+        profileReviewStatus:
+          document.reviewState === "reviewed"
+            ? "Profile review recorded"
+            : "Profile no-call recorded",
+        sourcePages: Array.from(pages).sort((first, second) => first - second),
+      };
     });
 }
 
@@ -446,8 +484,8 @@ function prepareReviewReasons(
     }
   }
 
-  if (progress.pendingReviewIds.includes("missing-or-expired")) {
-    reasons.push("Missing or expired items review is incomplete.");
+  if (progress.pendingReviewIds.includes("document-readiness-results")) {
+    reasons.push("Document-readiness results acknowledgement is incomplete.");
   }
 
   return reasons;
@@ -458,6 +496,40 @@ function profileField(
   fieldId: ApprovedFieldId,
 ): ConfirmedProfileField | null {
   return getSingleConfirmedField(profile, fieldId);
+}
+
+function readinessStatusLabel(
+  status: DocumentReadinessStatus,
+): PacketDocumentReadinessResult["statusLabel"] {
+  if (status === "present") {
+    return "Present";
+  }
+
+  if (status === "missing") {
+    return "Missing";
+  }
+
+  return "Needs review";
+}
+
+function packetReadinessSupportingDocument(
+  document: ReadinessSupportingDocument,
+): PacketDocumentReadinessSupportingDocument {
+  return {
+    documentName: safeDocumentName(document.documentName),
+    normalizedDocumentType:
+      document.normalizedDocumentType === null
+        ? null
+        : assertSafeDisplayText(
+            document.normalizedDocumentType,
+            "Confirmed readiness document type",
+            120,
+          ),
+    sampleKind: document.sampleKind,
+    reviewState: document.reviewState,
+    sourcePages: [...document.sourcePages],
+    matchBasis: document.matchBasis,
+  };
 }
 
 /**
@@ -549,6 +621,18 @@ export function buildReadinessPacketContent({
     );
     const officialSource = verifiedSource.officialSource;
     const calculation = understand.calculation;
+    const readinessEvaluation = evaluateDocumentReadiness(profile);
+    const readinessAcknowledgement =
+      prepareReview.readinessResultsAcknowledgement;
+
+    if (!readinessAcknowledgement) {
+      return {
+        status: "blocked",
+        reasons: [
+          "Document-readiness results must be acknowledged before packet generation.",
+        ],
+      };
+    }
 
     return {
       status: "ready",
@@ -652,6 +736,37 @@ export function buildReadinessPacketContent({
         neutralStatement: comparison.neutralStatement,
         context: PACKET_THRESHOLD_CONTEXT,
       },
+      documentReadinessResults: {
+        heading: "Document-readiness results",
+        checklistVersion: readinessEvaluation.checklistVersion,
+        sourceClassification: readinessEvaluation.sourceClassification,
+        prototypeLabel: readinessEvaluation.prototypeLabel,
+        reviewedAt: readinessAcknowledgement.acknowledgedAt,
+        reviewedAtDisplay: formatTimestamp(
+          readinessAcknowledgement.acknowledgedAt,
+        ),
+        acknowledgementStatus: PACKET_READINESS_ACKNOWLEDGEMENT_STATUS,
+        results: readinessEvaluation.results.map((result) => ({
+          requirementId: result.requirementId,
+          title: assertSafeDisplayText(
+            result.title,
+            "Readiness result title",
+            120,
+          ),
+          category: result.category,
+          status: result.status,
+          statusLabel: readinessStatusLabel(result.status),
+          explanation: assertSafeDisplayText(
+            result.explanation,
+            "Readiness result explanation",
+            500,
+          ),
+          supportingDocuments: result.supportingDocuments.map(
+            packetReadinessSupportingDocument,
+          ),
+        })),
+        disclaimer: readinessEvaluation.disclaimer,
+      },
       documentReadinessChecklist: {
         reviewedAt: prepareReview.updatedAt,
         reviewedAtDisplay: formatTimestamp(prepareReview.updatedAt),
@@ -669,11 +784,6 @@ export function buildReadinessPacketContent({
           {
             id: "residency-documentation",
             label: "Residency documentation",
-            status: "Reviewed by renter",
-          },
-          {
-            id: "missing-or-expired-items",
-            label: "Missing or expired items",
             status: "Reviewed by renter",
           },
         ],

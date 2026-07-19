@@ -4,13 +4,15 @@ import { applyConfirmedProfileCorrection } from "@/lib/profile-corrections";
 import {
   createPrepareSession,
   getPrepareReviewProgress,
+  LEGACY_PREPARE_SESSION_KEY,
   loadCurrentPrepareSession,
   loadPrepareSession,
   PREPARE_SESSION_KEY,
   savePrepareSession,
-  setMissingOrExpiredReview,
+  setDocumentReadinessAcknowledgement,
   setPrepareDocumentReview,
 } from "@/lib/prepare-session";
+import { READINESS_CHECKLIST_VERSION } from "@/lib/readiness/checklist";
 import { saveProfileSession } from "@/lib/session";
 import {
   acknowledgeUnderstandReview,
@@ -71,7 +73,7 @@ describe("Prepare temporary session", () => {
   it("restores explicit reviews after refresh only for the same workflow revision", () => {
     const profile = makeCompleteIncomeProfile({ grossPay: "$1,700.00" });
     const understand = makeCompletedUnderstand(profile);
-    const reviewed = setMissingOrExpiredReview(
+    const reviewed = setDocumentReadinessAcknowledgement(
       completeDocumentReviews(
         createPrepareSession(profile, understand, CREATED_AT),
       ),
@@ -87,6 +89,13 @@ describe("Prepare temporary session", () => {
     );
 
     expect(restored).toEqual(reviewed);
+    expect(restored?.version).toBe(2);
+    expect(restored?.binding.checklistVersion).toBe(
+      READINESS_CHECKLIST_VERSION,
+    );
+    expect(restored?.readinessResultsAcknowledgement).toEqual({
+      acknowledgedAt: "2026-07-19T12:09:00.000Z",
+    });
     expect(
       getPrepareReviewProgress(profile, understand, restored),
     ).toMatchObject({
@@ -105,8 +114,12 @@ describe("Prepare temporary session", () => {
     saveUnderstandSession(window.sessionStorage, understand);
     savePrepareSession(
       window.sessionStorage,
-      completeDocumentReviews(
-        createPrepareSession(profile, understand, CREATED_AT),
+      setDocumentReadinessAcknowledgement(
+        completeDocumentReviews(
+          createPrepareSession(profile, understand, CREATED_AT),
+        ),
+        true,
+        "2026-07-19T12:09:00.000Z",
       ),
     );
 
@@ -169,12 +182,13 @@ describe("Prepare temporary session", () => {
     ).toMatchObject({
       reviewedDocumentCount: 3,
       completedReviewCount: 3,
-      missingOrExpiredReviewed: false,
+      readinessResultsAcknowledged: false,
+      readinessResultsReviewedAt: null,
       allReviewsComplete: false,
       packetReady: false,
     });
 
-    const allReviewed = setMissingOrExpiredReview(
+    const allReviewed = setDocumentReadinessAcknowledgement(
       documentsReviewed,
       true,
       "2026-07-19T12:09:00.000Z",
@@ -183,6 +197,8 @@ describe("Prepare temporary session", () => {
       getPrepareReviewProgress(profile, understand, allReviewed),
     ).toMatchObject({
       completedReviewCount: 4,
+      readinessResultsAcknowledged: true,
+      readinessResultsReviewedAt: "2026-07-19T12:09:00.000Z",
       pendingReviewIds: [],
       allReviewsComplete: true,
       packetReady: true,
@@ -204,5 +220,65 @@ describe("Prepare temporary session", () => {
 
     expect(loadPrepareSession(window.sessionStorage)).toBeNull();
     expect(window.sessionStorage.getItem(PREPARE_SESSION_KEY)).toBeNull();
+  });
+
+  it("discards the Phase 3B v1 acknowledgement instead of migrating it", () => {
+    const profile = makeCompleteIncomeProfile();
+    const understand = makeCompletedUnderstand(profile);
+    const current = createPrepareSession(profile, understand, CREATED_AT);
+    window.sessionStorage.setItem(
+      LEGACY_PREPARE_SESSION_KEY,
+      JSON.stringify({
+        ...current,
+        version: 1,
+        missingOrExpiredReviewed: true,
+        readinessResultsAcknowledgement: undefined,
+      }),
+    );
+
+    expect(loadPrepareSession(window.sessionStorage)).toBeNull();
+    expect(
+      window.sessionStorage.getItem(LEGACY_PREPARE_SESSION_KEY),
+    ).toBeNull();
+  });
+
+  it("rejects all four reviews when the stored checklist version is stale", () => {
+    const profile = makeCompleteIncomeProfile();
+    const understand = makeCompletedUnderstand(profile);
+    const reviewed = setDocumentReadinessAcknowledgement(
+      completeDocumentReviews(
+        createPrepareSession(profile, understand, CREATED_AT),
+      ),
+      true,
+      "2026-07-19T12:09:00.000Z",
+    );
+    const stale = {
+      ...reviewed,
+      binding: {
+        ...reviewed.binding,
+        checklistVersion: "housingready-prototype-readiness-v0",
+      },
+    };
+    window.sessionStorage.setItem(
+      PREPARE_SESSION_KEY,
+      JSON.stringify(stale),
+    );
+
+    const restored = loadCurrentPrepareSession(
+      window.sessionStorage,
+      profile,
+      understand,
+    );
+
+    expect(restored).toBeNull();
+    expect(window.sessionStorage.getItem(PREPARE_SESSION_KEY)).toBeNull();
+    expect(
+      getPrepareReviewProgress(profile, understand, restored),
+    ).toMatchObject({
+      completedReviewCount: 0,
+      readinessResultsAcknowledged: false,
+      allReviewsComplete: false,
+      packetReady: false,
+    });
   });
 });

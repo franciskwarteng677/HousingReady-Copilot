@@ -4,6 +4,7 @@ import {
   isCompletedProfileSession,
 } from "@/lib/profile-fingerprint";
 import type { ProfileSession } from "@/lib/profile-schema";
+import { READINESS_CHECKLIST_VERSION } from "@/lib/readiness/checklist";
 import {
   PREPARE_DOCUMENT_CATEGORY_IDS,
   prepareDocumentCategoryIdSchema,
@@ -16,12 +17,13 @@ import type { RuleCorpus } from "@/lib/rules-schema";
 import type { UnderstandSession } from "@/lib/understand-schema";
 import { getUnderstandProgress } from "@/lib/understand-state";
 
-export const PREPARE_SESSION_KEY = "housingready:prepare:v1";
+export const PREPARE_SESSION_KEY = "housingready:prepare:v2";
+export const LEGACY_PREPARE_SESSION_KEY = "housingready:prepare:v1";
 export const PREPARE_UPDATED_EVENT = "housingready:prepare-updated";
 
 export const PREPARE_REVIEW_REQUIREMENT_IDS = [
   ...PREPARE_DOCUMENT_CATEGORY_IDS,
-  "missing-or-expired",
+  "document-readiness-results",
 ] as const;
 
 export type PrepareReviewRequirementId =
@@ -32,7 +34,8 @@ export type PrepareReviewProgress = {
   reviewedDocumentCount: number;
   completedReviewCount: number;
   totalReviewCount: 4;
-  missingOrExpiredReviewed: boolean;
+  readinessResultsAcknowledged: boolean;
+  readinessResultsReviewedAt: string | null;
   pendingReviewIds: PrepareReviewRequirementId[];
   allReviewsComplete: boolean;
   packetReady: boolean;
@@ -45,6 +48,7 @@ function bindingsMatch(
   return (
     first.profileRevision === second.profileRevision &&
     first.profileFingerprint === second.profileFingerprint &&
+    first.checklistVersion === second.checklistVersion &&
     first.understandAcknowledgedAt === second.understandAcknowledgedAt &&
     first.householdSize === second.householdSize &&
     first.calculationInputFingerprint ===
@@ -71,6 +75,7 @@ function bindingFromUnderstand(
   return {
     profileRevision: acknowledgement.profileRevision,
     profileFingerprint: acknowledgement.profileFingerprint,
+    checklistVersion: READINESS_CHECKLIST_VERSION,
     understandAcknowledgedAt: acknowledgement.acknowledgedAt,
     householdSize: acknowledgement.householdSize,
     calculationInputFingerprint:
@@ -125,14 +130,14 @@ export function createPrepareSession(
   }
 
   return prepareSessionSchema.parse({
-    version: 1,
+    version: 2,
     binding,
     documentReviews: {
       "identity-document": false,
       "income-documentation": false,
       "residency-documentation": false,
     },
-    missingOrExpiredReviewed: false,
+    readinessResultsAcknowledgement: null,
     createdAt,
     updatedAt: createdAt,
   });
@@ -142,6 +147,7 @@ export function savePrepareSession(
   storage: Storage,
   session: PrepareSession,
 ): void {
+  storage.removeItem(LEGACY_PREPARE_SESSION_KEY);
   storage.setItem(
     PREPARE_SESSION_KEY,
     JSON.stringify(prepareSessionSchema.parse(session)),
@@ -149,6 +155,12 @@ export function savePrepareSession(
 }
 
 export function loadPrepareSession(storage: Storage): PrepareSession | null {
+  // Phase 3B used a generic missing/expired acknowledgement that was not based
+  // on calculated readiness results. It cannot be migrated safely: retaining
+  // it would falsely imply that the renter reviewed the new versioned
+  // checklist. Discard it so all four Phase 3C reviews must be explicit.
+  storage.removeItem(LEGACY_PREPARE_SESSION_KEY);
+
   const serialized = storage.getItem(PREPARE_SESSION_KEY);
   if (!serialized) {
     return null;
@@ -217,14 +229,16 @@ export function setPrepareDocumentReview(
   });
 }
 
-export function setMissingOrExpiredReview(
+export function setDocumentReadinessAcknowledgement(
   session: PrepareSession,
-  reviewed: boolean,
+  acknowledged: boolean,
   updatedAt = new Date().toISOString(),
 ): PrepareSession {
   return prepareSessionSchema.parse({
     ...session,
-    missingOrExpiredReviewed: reviewed,
+    readinessResultsAcknowledgement: acknowledged
+      ? { acknowledgedAt: updatedAt }
+      : null,
     updatedAt,
   });
 }
@@ -242,18 +256,21 @@ export function getPrepareReviewProgress(
   const reviewedDocumentIds = PREPARE_DOCUMENT_CATEGORY_IDS.filter(
     (categoryId) => currentSession?.documentReviews[categoryId] === true,
   );
-  const missingOrExpiredReviewed =
-    currentSession?.missingOrExpiredReviewed === true;
+  const readinessResultsAcknowledgement =
+    currentSession?.readinessResultsAcknowledgement ?? null;
+  const readinessResultsAcknowledged = Boolean(
+    readinessResultsAcknowledgement,
+  );
   const pendingReviewIds: PrepareReviewRequirementId[] = [
     ...PREPARE_DOCUMENT_CATEGORY_IDS.filter(
       (categoryId) => !reviewedDocumentIds.includes(categoryId),
     ),
-    ...(missingOrExpiredReviewed
+    ...(readinessResultsAcknowledged
       ? []
-      : (["missing-or-expired"] as const)),
+      : (["document-readiness-results"] as const)),
   ];
   const completedReviewCount =
-    reviewedDocumentIds.length + (missingOrExpiredReviewed ? 1 : 0);
+    reviewedDocumentIds.length + (readinessResultsAcknowledged ? 1 : 0);
   const allReviewsComplete = completedReviewCount === 4;
 
   return {
@@ -261,7 +278,9 @@ export function getPrepareReviewProgress(
     reviewedDocumentCount: reviewedDocumentIds.length,
     completedReviewCount,
     totalReviewCount: 4,
-    missingOrExpiredReviewed,
+    readinessResultsAcknowledged,
+    readinessResultsReviewedAt:
+      readinessResultsAcknowledgement?.acknowledgedAt ?? null,
     pendingReviewIds,
     allReviewsComplete,
     packetReady: sessionCurrent && allReviewsComplete,
@@ -281,7 +300,8 @@ export function invalidatePrepareSessionForProfileChange(
     isCompletedProfileSession(nextProfile) &&
     session.binding.profileRevision === nextProfile.revision &&
     session.binding.profileFingerprint ===
-      createProfileFingerprint(nextProfile);
+      createProfileFingerprint(nextProfile) &&
+    session.binding.checklistVersion === READINESS_CHECKLIST_VERSION;
 
   if (profileCurrent) {
     return false;
@@ -311,4 +331,5 @@ export function invalidatePrepareSessionForUnderstandChange(
 
 export function clearPrepareSession(storage: Storage): void {
   storage.removeItem(PREPARE_SESSION_KEY);
+  storage.removeItem(LEGACY_PREPARE_SESSION_KEY);
 }

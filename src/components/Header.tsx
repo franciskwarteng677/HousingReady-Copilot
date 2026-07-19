@@ -4,27 +4,32 @@ import { DeleteSessionButton } from "@/components/DeleteSessionButton";
 
 export function Header() {
   return (
-    <header className="border-b border-line bg-white">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+    <header className="site-header">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3.5 sm:px-6 md:flex-row md:items-center md:justify-between md:gap-6 lg:px-8">
         <Link
           href="/"
           aria-label="HousingReady Copilot home"
-          className="link-focus inline-flex w-fit items-center gap-3"
+          className="brand-lockup link-focus surface-interactive inline-flex w-fit items-center gap-3 py-0.5 pr-2"
         >
-          <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand text-white shadow-sm">
+          <span className="brand-mark inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-white sm:size-11">
             <HouseHeart aria-hidden="true" size={22} strokeWidth={2.2} />
           </span>
-          <span className="text-lg font-extrabold tracking-[-0.025em] text-ink sm:text-xl">
-            HousingReady <span className="text-brand">Copilot</span>
+          <span className="min-w-0">
+            <span className="block text-lg font-extrabold leading-tight tracking-[-0.03em] text-ink sm:text-xl">
+              HousingReady <span className="text-brand">Copilot</span>
+            </span>
+            <span className="mt-0.5 hidden text-[0.68rem] font-bold uppercase tracking-[0.12em] text-slate-500 sm:block">
+              Renter-controlled readiness
+            </span>
           </span>
         </Link>
 
-        <nav aria-label="Primary navigation">
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-6">
+        <nav aria-label="Primary navigation" className="w-full md:w-auto">
+          <ul className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:justify-start sm:gap-x-5">
             <li>
               <Link
                 href="/privacy"
-                className="link-focus text-sm font-semibold text-slate-600 hover:text-brand"
+                className="button-interactive header-nav-link link-focus"
               >
                 Privacy &amp; Safety
               </Link>
@@ -32,7 +37,7 @@ export function Header() {
             <li>
               <Link
                 href="/about"
-                className="link-focus text-sm font-semibold text-slate-600 hover:text-brand"
+                className="button-interactive header-nav-link link-focus"
               >
                 About
               </Link>

@@ -43,9 +43,13 @@ export function DeleteSessionButton() {
       <button
         type="button"
         onClick={deleteSession}
-        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3.5 py-2 text-sm font-bold text-rose-700 shadow-sm outline-none transition-colors hover:border-rose-300 hover:bg-rose-50 focus-visible:ring-4 focus-visible:ring-rose-200"
+        className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rose-200/90 bg-white/90 px-4 py-2 text-sm font-extrabold text-rose-700 shadow-sm outline-none transition-[transform,background-color,border-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-50 hover:shadow-md motion-safe:active:translate-y-0 focus-visible:ring-4 focus-visible:ring-rose-200"
       >
-        <Trash2 aria-hidden="true" size={17} />
+        <Trash2
+          aria-hidden="true"
+          size={17}
+          className="transition-transform duration-200 motion-safe:group-hover:-rotate-6"
+        />
         Delete Session
       </button>
       {deleted ? (

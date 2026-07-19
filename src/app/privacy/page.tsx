@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <div className="grid gap-5 md:grid-cols-3">
         <section
           aria-labelledby="synthetic-only-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card"
+          className="group rounded-2xl border border-brand/15 bg-white/95 p-6 shadow-card ring-1 ring-white/70 transition-[transform,border-color,box-shadow] duration-300 motion-safe:hover:-translate-y-1 hover:border-brand/25 hover:shadow-lg"
         >
           <FileLock2 aria-hidden="true" size={23} className="text-brand" />
           <h2
@@ -37,7 +37,7 @@ export default function PrivacyPage() {
 
         <section
           aria-labelledby="temporary-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card"
+          className="group rounded-2xl border border-sky-200/80 bg-white/95 p-6 shadow-card ring-1 ring-white/70 transition-[transform,border-color,box-shadow] duration-300 motion-safe:hover:-translate-y-1 hover:border-sky-300 hover:shadow-lg"
         >
           <TimerReset aria-hidden="true" size={23} className="text-brand" />
           <h2
@@ -52,16 +52,17 @@ export default function PrivacyPage() {
             structured Profile fields, integer-cent money values, document
             metadata, minimal revision information, confirmed household size,
             deterministic calculation inputs and results, frozen corpus
-            identifiers, rule-review state, and Prepare review flags bound to
-            the current Profile and Understand revisions. Raw documents,
-            packet content, preview data, PDF bytes, full source text, source
-            URLs, and object URLs are never restored from storage.
+            identifiers, rule-review state, and version-bound Prepare review
+            flags and acknowledgement time. Document-readiness results are
+            recalculated from confirmed metadata instead of being persisted.
+            Raw documents, packet content, preview data, PDF bytes, full source
+            text, source URLs, and object URLs are never restored from storage.
           </p>
         </section>
 
         <section
           aria-labelledby="control-title"
-          className="rounded-2xl border border-line bg-white p-6 shadow-card"
+          className="group rounded-2xl border border-brand/15 bg-white/95 p-6 shadow-card ring-1 ring-white/70 transition-[transform,border-color,box-shadow] duration-300 motion-safe:hover:-translate-y-1 hover:border-brand/25 hover:shadow-lg"
         >
           <ShieldAlert aria-hidden="true" size={23} className="text-brand" />
           <h2 id="control-title" className="mt-4 text-lg font-bold text-ink">
@@ -76,7 +77,7 @@ export default function PrivacyPage() {
 
       <section
         aria-labelledby="downloaded-packet-title"
-        className="mt-6 rounded-2xl border border-line bg-white p-6 shadow-card sm:p-7"
+        className="mt-6 rounded-2xl border border-brand/20 bg-[linear-gradient(135deg,#ffffff,#effaf7)] p-6 shadow-card ring-1 ring-white/70 sm:p-7"
       >
         <h2 id="downloaded-packet-title" className="text-xl font-bold text-ink">
           Downloaded packets stay under your control

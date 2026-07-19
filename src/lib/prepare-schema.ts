@@ -15,6 +15,7 @@ export const prepareWorkflowBindingSchema = z
   .object({
     profileRevision: z.number().int().positive(),
     profileFingerprint: z.string().min(1),
+    checklistVersion: z.string().min(1),
     understandAcknowledgedAt: z.string().datetime(),
     householdSize: householdSizeSchema,
     calculationInputFingerprint: z.string().min(1),
@@ -31,12 +32,19 @@ export const prepareDocumentReviewsSchema = z
   })
   .strict();
 
+export const readinessResultsAcknowledgementSchema = z
+  .object({
+    acknowledgedAt: z.string().datetime(),
+  })
+  .strict();
+
 export const prepareSessionSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     binding: prepareWorkflowBindingSchema,
     documentReviews: prepareDocumentReviewsSchema,
-    missingOrExpiredReviewed: z.boolean(),
+    readinessResultsAcknowledgement:
+      readinessResultsAcknowledgementSchema.nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -46,6 +54,32 @@ export const prepareSessionSchema = z
       context.addIssue({
         code: "custom",
         message: "Prepare updatedAt cannot be earlier than createdAt.",
+        path: ["updatedAt"],
+      });
+    }
+
+    if (
+      session.readinessResultsAcknowledgement &&
+      Date.parse(session.readinessResultsAcknowledgement.acknowledgedAt) <
+        Date.parse(session.createdAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Document-readiness acknowledgement cannot be earlier than Prepare creation.",
+        path: ["readinessResultsAcknowledgement", "acknowledgedAt"],
+      });
+    }
+
+    if (
+      session.readinessResultsAcknowledgement &&
+      Date.parse(session.readinessResultsAcknowledgement.acknowledgedAt) >
+        Date.parse(session.updatedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Prepare updatedAt cannot be earlier than the document-readiness acknowledgement.",
         path: ["updatedAt"],
       });
     }
@@ -59,5 +93,8 @@ export type PrepareWorkflowBinding = z.infer<
 >;
 export type PrepareDocumentReviews = z.infer<
   typeof prepareDocumentReviewsSchema
+>;
+export type ReadinessResultsAcknowledgement = z.infer<
+  typeof readinessResultsAcknowledgementSchema
 >;
 export type PrepareSession = z.infer<typeof prepareSessionSchema>;

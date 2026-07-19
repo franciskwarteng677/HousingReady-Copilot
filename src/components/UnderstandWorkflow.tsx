@@ -447,11 +447,11 @@ export function UnderstandWorkflow() {
 
       <nav
         aria-label="Stage navigation"
-        className="rounded-2xl border border-line bg-white p-5 shadow-card sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6"
+        className="rounded-2xl border border-brand/15 bg-white/95 p-5 shadow-card ring-1 ring-white/70 sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-6"
       >
         <Link
           href="/profile"
-          className="link-focus inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3 font-bold text-ink hover:bg-slate-50 sm:w-auto"
+          className="link-focus inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3 font-extrabold text-ink shadow-sm transition-[transform,border-color,background-color] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/30 hover:bg-brand-soft/40 motion-safe:active:translate-y-0 sm:w-auto"
         >
           <ArrowLeft aria-hidden="true" size={19} />
           Back to Profile
@@ -469,13 +469,17 @@ export function UnderstandWorkflow() {
             disabled={!progress.understandComplete}
             aria-describedby="continue-prepare-help"
             onClick={() => push("/prepare")}
-            className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-bold text-white outline-none hover:bg-brand-dark focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 sm:w-auto"
+            className="group mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-extrabold text-white shadow-lg shadow-teal-900/15 outline-none transition-[transform,background-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:bg-brand-dark hover:shadow-xl motion-safe:active:translate-y-0 focus-visible:ring-4 focus-visible:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none sm:w-auto"
           >
             {!progress.understandComplete ? (
               <LockKeyhole aria-hidden="true" size={18} />
             ) : null}
             Continue to Prepare
-            <ArrowRight aria-hidden="true" size={19} />
+            <ArrowRight
+              aria-hidden="true"
+              size={19}
+              className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5"
+            />
           </button>
           {!progress.understandComplete ? (
             <p className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-900">

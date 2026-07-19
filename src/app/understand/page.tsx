@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BookOpenCheck } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { UnderstandWorkflow } from "@/components/UnderstandWorkflow";
 
@@ -12,6 +13,7 @@ export default function UnderstandPage() {
   return (
     <PageContainer
       eyebrow="Stage 2 of 3 · Understand"
+      introIcon={BookOpenCheck}
       title="Understand the information and the rules"
       description="Review confirmed inputs, transparent arithmetic, corpus-grounded explanations, and source status. This workspace prepares and explains; it never makes a housing decision."
     >

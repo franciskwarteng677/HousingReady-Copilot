@@ -46,7 +46,7 @@ export function ConfirmedProfilePanel({
   return (
     <section
       aria-labelledby="confirmed-profile-heading"
-      className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-7"
+      className="rounded-2xl border border-brand/15 bg-white/95 p-5 shadow-card ring-1 ring-white/70 sm:p-7"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -67,7 +67,7 @@ export function ConfirmedProfilePanel({
         </div>
         <Link
           href="/profile"
-          className="link-focus inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink hover:bg-slate-50"
+          className="link-focus inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2 text-sm font-extrabold text-ink shadow-sm transition-[transform,border-color,background-color] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/30 hover:bg-brand-soft/40"
         >
           <ArrowLeft aria-hidden="true" size={16} />
           Review or correct Profile
@@ -81,7 +81,7 @@ export function ConfirmedProfilePanel({
           return (
             <article
               key={fieldId}
-              className="rounded-xl border border-line bg-canvas p-4"
+              className="rounded-xl border border-line bg-canvas/80 p-4 transition-[transform,border-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-sm"
             >
               <h3 className="text-sm font-bold text-slate-600">{label}</h3>
               {fields.length === 0 ? (

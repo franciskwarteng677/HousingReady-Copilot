@@ -58,7 +58,7 @@ export function ProfileSummary({
   return (
     <section
       aria-labelledby="profile-summary-heading"
-      className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-7"
+      className="relative overflow-hidden rounded-2xl border border-brand/15 bg-white/95 p-5 shadow-card ring-1 ring-white/70 sm:p-7"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -75,10 +75,10 @@ export function ProfileSummary({
         </div>
         <span
           className={
-            "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold " +
+            "inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-extrabold shadow-sm " +
             (profileComplete
-              ? "bg-brand-soft text-brand-dark"
-              : "bg-slate-100 text-slate-700")
+              ? "border-brand/20 bg-brand-soft text-brand-dark"
+              : "border-slate-200 bg-slate-100 text-slate-700")
           }
         >
           {profileComplete ? (
@@ -101,7 +101,7 @@ export function ProfileSummary({
       ) : null}
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <article className="rounded-xl border border-line bg-canvas p-4">
+        <article className="rounded-xl border border-line bg-canvas/80 p-4 transition-[transform,border-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-sm">
           <UserRound aria-hidden="true" size={20} className="text-brand" />
           <h3 className="mt-3 text-sm font-bold text-ink">
             Confirmed person name
@@ -110,7 +110,7 @@ export function ProfileSummary({
             {fullName?.value ?? "Not confirmed"}
           </p>
         </article>
-        <article className="rounded-xl border border-line bg-canvas p-4">
+        <article className="rounded-xl border border-line bg-canvas/80 p-4 transition-[transform,border-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-sm">
           <MapPin aria-hidden="true" size={20} className="text-brand" />
           <h3 className="mt-3 text-sm font-bold text-ink">
             Confirmed address
@@ -119,7 +119,7 @@ export function ProfileSummary({
             {address?.value ?? "Not confirmed"}
           </p>
         </article>
-        <article className="rounded-xl border border-line bg-canvas p-4">
+        <article className="rounded-xl border border-line bg-canvas/80 p-4 transition-[transform,border-color,box-shadow] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-brand/25 hover:shadow-sm">
           <WalletCards aria-hidden="true" size={20} className="text-brand" />
           <h3 className="mt-3 text-sm font-bold text-ink">
             Confirmed income-related fields
@@ -142,7 +142,7 @@ export function ProfileSummary({
       </div>
 
       <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-line p-4">
+        <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
           <dt className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <FileCheck2 aria-hidden="true" size={17} className="text-brand" />
             Documents reviewed
@@ -151,7 +151,7 @@ export function ProfileSummary({
             {session?.counts.documentsReviewed ?? 0}
           </dd>
         </div>
-        <div className="rounded-xl border border-line p-4">
+        <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
           <dt className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <CircleCheck aria-hidden="true" size={17} className="text-brand" />
             Fields confirmed
@@ -160,7 +160,7 @@ export function ProfileSummary({
             {session?.counts.fieldsConfirmed ?? 0}
           </dd>
         </div>
-        <div className="rounded-xl border border-line p-4">
+        <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
           <dt className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <CircleAlert
               aria-hidden="true"
@@ -173,7 +173,7 @@ export function ProfileSummary({
             {session?.counts.fieldsExcluded ?? 0}
           </dd>
         </div>
-        <div className="rounded-xl border border-line p-4">
+        <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
           <dt className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <CircleAlert
               aria-hidden="true"
